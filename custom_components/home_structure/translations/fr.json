@@ -1,0 +1,218 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Home Structure",
+        "description": "Home Structure décrit quels espaces de votre logement sont voisins et ce qui les sépare (espace ouvert, porte, fenêtre, volet, mur…), avec les capteurs qui indiquent si c'est ouvert. D'autres intégrations peuvent ensuite s'en servir. Rien n'est modifié chez vous. Ajoutez-la, puis utilisez Configurer pour décrire votre logement."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Home Structure est déjà configurée."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Home Structure",
+        "description": "Les pièces sont celles de Home Assistant. Ajoutez des zones pour les espaces qui ne sont pas des pièces (jardin, rue, hall d'immeuble…), puis reliez les espaces qui se touchent.",
+        "menu_options": {
+          "add_zone": "Ajouter une zone",
+          "choose_zone": "Modifier ou supprimer une zone",
+          "add_connection": "Relier deux espaces",
+          "choose_connection": "Modifier ou supprimer une liaison",
+          "finish": "Enregistrer et fermer"
+        }
+      },
+      "add_zone": {
+        "title": "Ajouter une zone",
+        "description": "Une zone est un espace qui n'est pas une pièce ordinaire. Elle peut être dans votre logement (jardin, balcon) ou en dehors (rue, hall d'immeuble, voisin). Si elle existe déjà comme pièce Home Assistant, choisissez-la pour que ses appareils restent en place.",
+        "data": {
+          "kind": "Type",
+          "area": "Pièce Home Assistant existante (facultatif)"
+        },
+        "data_description": {
+          "area": "Laissez vide pour un espace sans pièce, comme la rue."
+        }
+      },
+      "zone_details": {
+        "title": "Détails de la zone",
+        "description": "{area}",
+        "data": {
+          "name": "Nom",
+          "in_home": "Fait partie du logement"
+        },
+        "data_description": {
+          "name": "Facultatif pour une pièce existante : il remplace son nom seulement dans Home Structure.",
+          "in_home": "Activé pour un jardin ou un balcon qui appartient au logement ; désactivé pour la rue, le hall d'immeuble ou un voisin."
+        }
+      },
+      "choose_zone": {
+        "title": "Choisir une zone",
+        "data": {
+          "zone": "Zone"
+        }
+      },
+      "edit_zone": {
+        "title": "Modifier {name}",
+        "data": {
+          "name": "Nom",
+          "kind": "Type",
+          "in_home": "Fait partie du logement",
+          "remove": "Supprimer cette zone (et ses liaisons)"
+        }
+      },
+      "add_connection": {
+        "title": "Relier deux espaces",
+        "description": "Choisissez deux espaces voisins, puis indiquez ce qui les sépare. Un simple mur compte aussi : il dit que les espaces sont adjacents.",
+        "data": {
+          "a": "Premier espace",
+          "b": "Second espace"
+        }
+      },
+      "separation": {
+        "title": "Qu'est-ce qui les sépare ?",
+        "description": "{connection}",
+        "data": {
+          "type": "Séparation",
+          "sensor": "Capteur d'ouverture (facultatif)",
+          "add_another": "Ajouter une autre séparation entre les deux mêmes espaces"
+        },
+        "data_description": {
+          "sensor": "Un capteur de porte ou de fenêtre, ou un volet (cover). Inutile pour un espace ouvert, une ouverture ou un mur."
+        }
+      },
+      "choose_connection": {
+        "title": "Choisir une liaison",
+        "data": {
+          "connection": "Liaison"
+        }
+      },
+      "edit_connection": {
+        "title": "Modifier une liaison",
+        "description": "{connection}",
+        "data": {
+          "remove_separations": "Séparations à supprimer",
+          "add_separation": "Ajouter une séparation",
+          "remove_connection": "Supprimer toute la liaison"
+        }
+      }
+    },
+    "error": {
+      "name_required": "Un nom est nécessaire pour une zone qui n'est pas une pièce Home Assistant.",
+      "duplicate_zone_name": "Un autre espace porte déjà ce nom.",
+      "area_already_zone": "Cette pièce a déjà un type.",
+      "same_space": "Choisissez deux espaces différents.",
+      "sensor_not_needed": "Un espace ouvert, une ouverture et un mur n'ont pas de capteur."
+    },
+    "abort": {
+      "duplicate_zone_name": "Deux zones portent le même nom.",
+      "invalid_zone": "Une zone est invalide.",
+      "unknown_area": "Une zone fait référence à une pièce Home Assistant qui n'existe plus.",
+      "unknown_space": "Une liaison fait référence à un espace qui n'existe plus. Supprimez-la et ajoutez-la de nouveau.",
+      "same_space": "Choisissez deux espaces différents.",
+      "duplicate_connection": "Deux liaisons relient les mêmes espaces.",
+      "no_separation": "Une liaison n'a aucune séparation.",
+      "invalid_separation": "Une séparation est invalide.",
+      "sensor_not_needed": "Un espace ouvert, une ouverture et un mur n'ont pas de capteur."
+    }
+  },
+  "selector": {
+    "zone_kind": {
+      "options": {
+        "garden": "Jardin",
+        "balcony": "Balcon",
+        "terrace": "Terrasse",
+        "courtyard": "Cour",
+        "garage": "Garage",
+        "hall": "Hall ou palier",
+        "stairwell": "Cage d'escalier",
+        "common_area": "Partie commune de l'immeuble",
+        "street": "Rue",
+        "neighbor": "Logement voisin",
+        "other": "Autre"
+      }
+    },
+    "separation_type": {
+      "options": {
+        "open_space": "espace ouvert",
+        "opening": "ouverture",
+        "door": "porte",
+        "glass_door": "porte vitrée",
+        "window": "fenêtre",
+        "shutter": "volet",
+        "wall": "mur"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "sep_open_space": {
+        "name": "{connection} · espace ouvert",
+        "state": {
+          "open": "Ouvert",
+          "closed": "Fermé",
+          "partial": "Partiellement ouvert"
+        }
+      },
+      "sep_opening": {
+        "name": "{connection} · ouverture",
+        "state": {
+          "open": "Ouvert",
+          "closed": "Fermé",
+          "partial": "Partiellement ouvert"
+        }
+      },
+      "sep_door": {
+        "name": "{connection} · porte",
+        "state": {
+          "open": "Ouvert",
+          "closed": "Fermé",
+          "partial": "Partiellement ouvert"
+        }
+      },
+      "sep_glass_door": {
+        "name": "{connection} · porte vitrée",
+        "state": {
+          "open": "Ouvert",
+          "closed": "Fermé",
+          "partial": "Partiellement ouvert"
+        }
+      },
+      "sep_window": {
+        "name": "{connection} · fenêtre",
+        "state": {
+          "open": "Ouvert",
+          "closed": "Fermé",
+          "partial": "Partiellement ouvert"
+        }
+      },
+      "sep_shutter": {
+        "name": "{connection} · volet",
+        "state": {
+          "open": "Ouvert",
+          "closed": "Fermé",
+          "partial": "Partiellement ouvert"
+        }
+      },
+      "sep_wall": {
+        "name": "{connection} · mur",
+        "state": {
+          "open": "Ouvert",
+          "closed": "Fermé",
+          "partial": "Partiellement ouvert"
+        }
+      }
+    }
+  },
+  "services": {
+    "get_structure": {
+      "name": "Obtenir la structure",
+      "description": "Renvoie les espaces du logement, leurs liaisons et l'état actuel de chaque séparation."
+    }
+  },
+  "exceptions": {
+    "not_loaded": {
+      "message": "Home Structure n'est pas configurée."
+    }
+  }
+}

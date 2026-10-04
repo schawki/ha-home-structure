@@ -1,0 +1,218 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Home Structure",
+        "description": "Home Structure describes which spaces of your home are next to each other and what separates them (open space, door, window, shutter, wall…) with the sensors that tell if it is open. Other integrations can then use it. Nothing is changed in your home. Add it, then use Configure to describe your home."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Home Structure is already set up."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Home Structure",
+        "description": "Rooms are your Home Assistant areas. Add zones for spaces that are not rooms (garden, street, building hall…), then connect the spaces that are next to each other.",
+        "menu_options": {
+          "add_zone": "Add a zone",
+          "choose_zone": "Edit or remove a zone",
+          "add_connection": "Connect two spaces",
+          "choose_connection": "Edit or remove a connection",
+          "finish": "Save and close"
+        }
+      },
+      "add_zone": {
+        "title": "Add a zone",
+        "description": "A zone is a space that is not an ordinary room. It can be inside your home (garden, balcony) or outside it (street, building hall, neighbour). If it already exists as a Home Assistant area, choose it so its devices stay where they are.",
+        "data": {
+          "kind": "Kind",
+          "area": "Existing Home Assistant area (optional)"
+        },
+        "data_description": {
+          "area": "Leave empty for a space with no area, such as the street."
+        }
+      },
+      "zone_details": {
+        "title": "Zone details",
+        "description": "{area}",
+        "data": {
+          "name": "Name",
+          "in_home": "Part of the home"
+        },
+        "data_description": {
+          "name": "Optional for an existing area: it replaces the area name only in Home Structure.",
+          "in_home": "Switch on for a garden or balcony that belongs to the home; off for the street, the building hall or a neighbour."
+        }
+      },
+      "choose_zone": {
+        "title": "Choose a zone",
+        "data": {
+          "zone": "Zone"
+        }
+      },
+      "edit_zone": {
+        "title": "Edit {name}",
+        "data": {
+          "name": "Name",
+          "kind": "Kind",
+          "in_home": "Part of the home",
+          "remove": "Remove this zone (and its connections)"
+        }
+      },
+      "add_connection": {
+        "title": "Connect two spaces",
+        "description": "Choose two spaces that are next to each other, then say what separates them. A plain wall also counts: it says the spaces are adjacent.",
+        "data": {
+          "a": "First space",
+          "b": "Second space"
+        }
+      },
+      "separation": {
+        "title": "What separates them?",
+        "description": "{connection}",
+        "data": {
+          "type": "Separation",
+          "sensor": "Opening sensor (optional)",
+          "add_another": "Add another separation between the same two spaces"
+        },
+        "data_description": {
+          "sensor": "A door or window sensor, or a cover for a shutter. Not needed for an open space, an opening or a wall."
+        }
+      },
+      "choose_connection": {
+        "title": "Choose a connection",
+        "data": {
+          "connection": "Connection"
+        }
+      },
+      "edit_connection": {
+        "title": "Edit a connection",
+        "description": "{connection}",
+        "data": {
+          "remove_separations": "Separations to remove",
+          "add_separation": "Add a separation",
+          "remove_connection": "Remove the whole connection"
+        }
+      }
+    },
+    "error": {
+      "name_required": "A name is required for a zone that is not a Home Assistant area.",
+      "duplicate_zone_name": "Another space already has this name.",
+      "area_already_zone": "This area is already a zone.",
+      "same_space": "Choose two different spaces.",
+      "sensor_not_needed": "An open space, an opening and a wall have no sensor."
+    },
+    "abort": {
+      "duplicate_zone_name": "Two zones have the same name.",
+      "invalid_zone": "A zone is invalid.",
+      "unknown_area": "A zone refers to an area that no longer exists.",
+      "unknown_space": "A connection refers to a space that no longer exists. Remove it and add it again.",
+      "same_space": "Choose two different spaces.",
+      "duplicate_connection": "Two connections link the same spaces.",
+      "no_separation": "A connection has no separation.",
+      "invalid_separation": "A separation is invalid.",
+      "sensor_not_needed": "An open space, an opening and a wall have no sensor."
+    }
+  },
+  "selector": {
+    "zone_kind": {
+      "options": {
+        "garden": "Garden",
+        "balcony": "Balcony",
+        "terrace": "Terrace",
+        "courtyard": "Courtyard",
+        "garage": "Garage",
+        "hall": "Hall or landing",
+        "stairwell": "Stairwell",
+        "common_area": "Shared area of the building",
+        "street": "Street",
+        "neighbor": "Neighbouring home",
+        "other": "Other"
+      }
+    },
+    "separation_type": {
+      "options": {
+        "open_space": "open space",
+        "opening": "opening",
+        "door": "door",
+        "glass_door": "glass door",
+        "window": "window",
+        "shutter": "shutter",
+        "wall": "wall"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "sep_open_space": {
+        "name": "{connection} · open space",
+        "state": {
+          "open": "Open",
+          "closed": "Closed",
+          "partial": "Partly open"
+        }
+      },
+      "sep_opening": {
+        "name": "{connection} · opening",
+        "state": {
+          "open": "Open",
+          "closed": "Closed",
+          "partial": "Partly open"
+        }
+      },
+      "sep_door": {
+        "name": "{connection} · door",
+        "state": {
+          "open": "Open",
+          "closed": "Closed",
+          "partial": "Partly open"
+        }
+      },
+      "sep_glass_door": {
+        "name": "{connection} · glass door",
+        "state": {
+          "open": "Open",
+          "closed": "Closed",
+          "partial": "Partly open"
+        }
+      },
+      "sep_window": {
+        "name": "{connection} · window",
+        "state": {
+          "open": "Open",
+          "closed": "Closed",
+          "partial": "Partly open"
+        }
+      },
+      "sep_shutter": {
+        "name": "{connection} · shutter",
+        "state": {
+          "open": "Open",
+          "closed": "Closed",
+          "partial": "Partly open"
+        }
+      },
+      "sep_wall": {
+        "name": "{connection} · wall",
+        "state": {
+          "open": "Open",
+          "closed": "Closed",
+          "partial": "Partly open"
+        }
+      }
+    }
+  },
+  "services": {
+    "get_structure": {
+      "name": "Get structure",
+      "description": "Returns the spaces of the home, how they are connected and the current state of every separation."
+    }
+  },
+  "exceptions": {
+    "not_loaded": {
+      "message": "Home Structure is not set up."
+    }
+  }
+}
