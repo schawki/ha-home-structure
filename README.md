@@ -35,6 +35,16 @@ It does not do anything with sound, light, heat or presence. It only keeps the d
   A door and a glass door between the same two spaces are two separations of one connection.
 - **Sensors.** A separation that can change may have a `binary_sensor` (door or window contact) or a `cover` (shutter). Its state becomes `open`, `closed`, `partial` (a cover between 1 and 99 %, or moving) or `unknown` (no sensor, or it does not answer).
 
+## Setting it up
+
+*Settings → Devices & services → Home Structure → Configure*, three quick steps, then **Save and close**:
+
+1. **Choose the spaces.** Every Home Assistant area is ticked; untick the ones that are not places of your home. The floor of each area is shown to help you choose. Nothing is guessed from names or floors.
+2. **Mark gardens, halls and other zones** in one screen: one list per kind (gardens, balconies, terraces, courtyards, garages, halls, stairwells, shared areas), plus two switches for the street and a neighbouring home. The kind decides whether the zone is part of the home (a garden is, a building hall is not); change it zone by zone if needed.
+3. **Connect spaces quickly.** Pick a space, tick everything that touches it, say what separates them; then refine each new connection (type and opening sensor). Only door, window and cover entities of the two areas are offered as sensors.
+
+The older one-by-one screens remain available.
+
 ## What you get
 
 - **One sensor per separation**, for example `sensor.home_structure_living_room_building_hall_door`, with the state `open`, `closed` or `partial` (unknown when it cannot be read) and the attributes `type`, `space_a`, `space_b`, `name_a`, `name_b`, `sensor` and `position`. Use it in automations, templates and dashboards.

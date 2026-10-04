@@ -19,6 +19,17 @@ def areas(hass):
     return {n: reg.async_create(n).id for n in ("Salon", "Entrée", "Jardin", "Entrée (extérieur)")}
 
 
+@pytest.fixture
+def floor_areas(hass):
+    """Areas with floors, plus a technical grouping without floor."""
+    from homeassistant.helpers import floor_registry as fr
+    floor = fr.async_get(hass).async_create("Ground")
+    reg = ar.async_get(hass)
+    ids = {n: reg.async_create(n, floor_id=floor.floor_id).id for n in ("Living", "Kitchen", "Garden")}
+    ids["Servers"] = reg.async_create("Servers").id
+    return ids
+
+
 async def make_entry(hass, options=None):
     entry = MockConfigEntry(domain=DOMAIN, data={}, options=options if options is not None else {"zones": [], "connections": []}, title="Home Structure")
     entry.add_to_hass(hass)
@@ -45,7 +56,7 @@ async def test_config_flow_is_one_click_and_single(hass):
 async def test_describe_a_home_with_the_options_flow(hass, areas):
     entry = await make_entry(hass)
     flow = await hass.config_entries.options.async_init(entry.entry_id)
-    assert flow["type"] is FlowResultType.MENU and flow["menu_options"] == ["add_zone", "add_connection", "finish"]
+    assert flow["type"] is FlowResultType.MENU and flow["menu_options"] == ["choose_spaces", "zones_bulk", "quick_connect", "add_zone", "add_connection", "finish"]
 
     # the garden is a Home Assistant area: give it a kind, no new space
     r = await step(hass, flow, next_step_id="add_zone")
@@ -209,3 +220,63 @@ def test_english_covers_the_vocabulary():
     assert set(en["selector"]["zone_kind"]["options"]) == set(ZONE_KINDS)
     assert set(en["selector"]["separation_type"]["options"]) == set(SEPARATION_TYPES)
     assert {f"sep_{t}" for t in SEPARATION_TYPES} == set(en["entity"]["sensor"])
+
+
+# ------------------------------------------------------------------------------------------------ quick setup
+async def test_choose_spaces_is_all_ticked_and_leaves_areas_out(hass, floor_areas):
+    entry = await make_entry(hass)
+    flow = await hass.config_entries.options.async_init(entry.entry_id)
+    r = await step(hass, flow, next_step_id="choose_spaces")
+    schema = r["data_schema"].schema
+    key = next(k for k in schema if k == "areas")
+    assert sorted(key.default()) == sorted(floor_areas.values())                       # nothing guessed: everything is ticked
+    labels = {o["value"]: o["label"] for o in schema[key].config["options"]}
+    assert labels[floor_areas["Living"]] == "Living · floor Ground" and labels[floor_areas["Servers"]] == "Servers · no floor"
+    r = await step(hass, r, areas=[v for k, v in floor_areas.items() if k != "Servers"])
+    r = await step(hass, r, next_step_id="finish")
+    assert entry.options["excluded_areas"] == [floor_areas["Servers"]]
+    from custom_components.home_structure import structure
+    assert floor_areas["Servers"] not in {s["area_id"] for s in structure.current(hass, entry)["spaces"] if s["area_id"]}
+
+
+async def test_zones_bulk_connect_quickly_and_refine(hass, floor_areas):
+    from homeassistant.helpers import device_registry as dr
+    reg = er.async_get(hass)
+    door = reg.async_get_or_create("binary_sensor", "test", "door1", suggested_object_id="kitchen_door", original_device_class="door")
+    reg.async_update_entity(door.entity_id, area_id=floor_areas["Kitchen"])
+    motion = reg.async_get_or_create("binary_sensor", "test", "mo1", suggested_object_id="kitchen_motion", original_device_class="motion")
+    reg.async_update_entity(motion.entity_id, area_id=floor_areas["Kitchen"])
+    entry = await make_entry(hass)
+    flow = await hass.config_entries.options.async_init(entry.entry_id)
+    r = await step(hass, flow, next_step_id="zones_bulk")
+    r = await step(hass, r, garden=[floor_areas["Garden"]], street=True)
+    assert r["type"] is FlowResultType.MENU
+    # quick connect: Living touches Kitchen (door) and Garden (opening)
+    r = await step(hass, r, next_step_id="quick_connect")
+    r = await step(hass, r, origin=f"area:{floor_areas['Living']}")
+    r = await step(hass, r, targets=[f"area:{floor_areas['Kitchen']}"], type="door")
+    assert r["step_id"] == "refine"
+    cand = next(k for k in r["data_schema"].schema if k == "sensor")
+    assert r["data_schema"].schema[cand].config["include_entities"] == [door.entity_id]       # only door-like entities of the two areas
+    r = await step(hass, r, type="door", sensor=door.entity_id)
+    assert r["type"] is FlowResultType.MENU
+    r = await step(hass, r, next_step_id="quick_connect")
+    r = await step(hass, r, origin=f"area:{floor_areas['Living']}")
+    assert "Kitchen" in r["description_placeholders"]["linked"]
+    r = await step(hass, r, targets=[f"area:{floor_areas['Garden']}", "zone:street"], type="opening")
+    assert r["type"] is FlowResultType.MENU                                                    # nothing to refine for an opening
+    r = await step(hass, r, next_step_id="finish")
+    z = {z["id"]: z for z in entry.options["zones"]}
+    assert z[f"area:{floor_areas['Garden']}"] == {"id": f"area:{floor_areas['Garden']}", "kind": "garden", "in_home": True}
+    assert z["zone:street"]["kind"] == "street" and z["zone:street"]["in_home"] is False and z["zone:street"]["name"] == "Street"
+    assert len(entry.options["connections"]) == 3
+    c = next(c for c in entry.options["connections"] if c["b"] == f"area:{floor_areas['Kitchen']}")
+    assert c["separations"][0]["sensor"] == door.entity_id
+
+
+async def test_zones_bulk_refuses_an_area_in_two_kinds(hass, floor_areas):
+    entry = await make_entry(hass)
+    flow = await hass.config_entries.options.async_init(entry.entry_id)
+    r = await step(hass, flow, next_step_id="zones_bulk")
+    r = await step(hass, r, garden=[floor_areas["Garden"]], balcony=[floor_areas["Garden"]])
+    assert r["type"] is FlowResultType.FORM and r["errors"]["base"] == "area_in_two_kinds"

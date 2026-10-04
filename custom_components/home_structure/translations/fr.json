@@ -14,11 +14,14 @@
     "step": {
       "init": {
         "title": "Home Structure",
-        "description": "Les pièces sont celles de Home Assistant. Ajoutez des zones pour les espaces qui ne sont pas des pièces (jardin, rue, hall d'immeuble…), puis reliez les espaces qui se touchent.",
+        "description": "1. Choisissez les pièces Home Assistant qui font partie de la structure. 2. Indiquez lesquelles sont des jardins, halls, balcons… 3. Reliez les espaces qui se touchent. Enregistrez à la fin.",
         "menu_options": {
-          "add_zone": "Ajouter une zone",
+          "choose_spaces": "Choisir les espaces (pièces)",
+          "zones_bulk": "Marquer jardins, halls et autres zones",
+          "quick_connect": "Relier des espaces rapidement",
+          "add_zone": "Ajouter une seule zone (rue, voisin…)",
           "choose_zone": "Modifier ou supprimer une zone",
-          "add_connection": "Relier deux espaces",
+          "add_connection": "Relier deux espaces un par un",
           "choose_connection": "Modifier ou supprimer une liaison",
           "finish": "Enregistrer et fermer"
         }
@@ -95,6 +98,66 @@
           "add_separation": "Ajouter une séparation",
           "remove_connection": "Supprimer toute la liaison"
         }
+      },
+      "choose_spaces": {
+        "title": "Espaces de la structure",
+        "description": "Décochez les pièces qui ne sont pas des lieux de votre logement (regroupements techniques, par exemple). Les pièces décochées sont ignorées ; leurs zones et liaisons sont retirées.",
+        "data": {
+          "areas": "Pièces"
+        },
+        "data_description": {
+          "areas": "Toutes les pièces sont cochées par défaut. L'étage de chacune est indiqué pour vous aider à choisir."
+        }
+      },
+      "zones_bulk": {
+        "title": "Jardins, halls et autres zones",
+        "description": "Choisissez, par type, les pièces qui ne sont pas des pièces ordinaires. Jardins, balcons, terrasses, cours et garages font partie du logement ; halls, cages d'escalier et parties communes non (à modifier zone par zone dans « Modifier ou retirer une zone »).",
+        "data": {
+          "garden": "Jardins",
+          "balcony": "Balcons",
+          "terrace": "Terrasses",
+          "courtyard": "Cours",
+          "garage": "Garages",
+          "hall": "Halls ou paliers",
+          "stairwell": "Cages d'escalier",
+          "common_area": "Parties communes de l'immeuble",
+          "other": "Autres zones",
+          "street": "Ajouter la rue",
+          "neighbor": "Ajouter un logement voisin"
+        },
+        "data_description": {
+          "street": "Un espace sans pièce Home Assistant.",
+          "neighbor": "Un espace sans pièce Home Assistant."
+        }
+      },
+      "quick_connect": {
+        "title": "Relier des espaces rapidement",
+        "description": "Choisissez un espace, puis vous indiquerez tout ce qui le touche.",
+        "data": {
+          "origin": "Espace"
+        }
+      },
+      "quick_targets": {
+        "title": "Qu'est-ce qui touche {origin} ?",
+        "description": "Déjà reliés : {linked}. Cochez les autres espaces qui le touchent et indiquez ce qui les sépare ; vous pourrez affiner chaque liaison ensuite.",
+        "data": {
+          "targets": "Espaces qui le touchent",
+          "type": "Ce qui les sépare"
+        },
+        "data_description": {
+          "type": "Appliqué à tous les espaces cochés ici."
+        }
+      },
+      "refine": {
+        "title": "Affiner une liaison",
+        "description": "{connection}\nCorrigez ce qui les sépare si besoin, et choisissez le capteur qui dit si c'est ouvert. Laissez le capteur vide pour passer. Restantes après celle-ci : {left}.",
+        "data": {
+          "type": "Séparation",
+          "sensor": "Capteur d'ouverture (facultatif)"
+        },
+        "data_description": {
+          "sensor": "Seuls les capteurs de porte, de fenêtre et les volets des deux pièces sont listés quand il y en a."
+        }
       }
     },
     "error": {
@@ -102,7 +165,8 @@
       "duplicate_zone_name": "Un autre espace porte déjà ce nom.",
       "area_already_zone": "Cette pièce a déjà un type.",
       "same_space": "Choisissez deux espaces différents.",
-      "sensor_not_needed": "Un espace ouvert, une ouverture et un mur n'ont pas de capteur."
+      "sensor_not_needed": "Un espace ouvert, une ouverture et un mur n'ont pas de capteur.",
+      "area_in_two_kinds": "Une pièce ne peut avoir qu'un seul type. Retirez-la de l'une des listes."
     },
     "abort": {
       "duplicate_zone_name": "Deux zones portent le même nom.",

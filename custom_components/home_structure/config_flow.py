@@ -16,6 +16,12 @@ from . import model, structure
 from .const import DOMAIN, PERMANENT, SENSOR_DOMAINS, SEPARATION_TYPES, ZONE_KINDS
 
 
+BULK_KINDS = [k for k in ZONE_KINDS if k not in ("street", "neighbor")]     # kinds that can be an existing Home Assistant area
+VIRTUAL = {"street": {"en": "Street", "fr": "Rue"}, "neighbor": {"en": "Neighbouring home", "fr": "Logement voisin"}}
+FLOOR_TEXT = {"en": ("floor", "no floor"), "fr": ("étage", "sans étage")}
+NEEDS_SENSOR = [t for t in SEPARATION_TYPES if t not in PERMANENT]
+
+
 def _new_id() -> str:
     return uuid.uuid4().hex[:8]
 
@@ -48,6 +54,8 @@ class HomeStructureOptionsFlow(OptionsFlowWithReload):
         self._edit_zone: str | None = None
         self._conn: dict | None = None        # connection receiving separations
         self._kind = ""
+        self._origin: str | None = None       # space whose neighbours are being given (quick connect)
+        self._refine: list[str] = []          # connections just created, waiting for their sensor
 
     # ------------------------------------------------------------------ helpers
     @property
@@ -70,7 +78,7 @@ class HomeStructureOptionsFlow(OptionsFlowWithReload):
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if not self._data:
             self._data = copy.deepcopy({"zones": [], "connections": [], **self.config_entry.options})
-        menu = ["add_zone"]
+        menu = ["choose_spaces", "zones_bulk", "quick_connect", "add_zone"]
         if self._data["zones"]:
             menu.append("choose_zone")
         menu.append("add_connection")
@@ -84,6 +92,112 @@ class HomeStructureOptionsFlow(OptionsFlowWithReload):
         if errors:
             return self.async_abort(reason=errors[0])
         return self.async_create_entry(data=self._data)
+
+    # ------------------------------------------------------------------ which areas are part of the structure
+    def _floor_label(self, a: dict) -> str:
+        word, none = FLOOR_TEXT.get(self.hass.config.language.split("-")[0], FLOOR_TEXT["en"])
+        return f"{a['name']} · {word} {a['floor']}" if a.get("floor") else f"{a['name']} · {none}"
+
+    async def async_step_choose_spaces(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Tick the Home Assistant areas that belong to the structure; every area is ticked until the user says otherwise."""
+        all_areas = structure.areas(self.hass)
+        if user_input is not None:
+            chosen = set(user_input["areas"])
+            model.exclude_areas(self._data, {a["id"] for a in all_areas if a["id"] not in chosen})
+            return await self.async_step_init()
+        left_out = set(self._data.get("excluded_areas", []))
+        options = [{"value": a["id"], "label": self._floor_label(a)} for a in all_areas]
+        default = [a["id"] for a in all_areas if a["id"] not in left_out]
+        schema = vol.Schema({vol.Required("areas", default=default): _select(options, multiple=True)})
+        return self.async_show_form(step_id="choose_spaces", data_schema=schema)
+
+    # ------------------------------------------------------------------ zones in bulk
+    async def async_step_zones_bulk(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """One field per kind of zone: pick the areas that are gardens, halls, balconies… in one go."""
+        errors: dict[str, str] = {}
+        lang = self.hass.config.language.split("-")[0]
+        current = {k: [z["id"][5:] for z in self._data["zones"] if z["id"].startswith("area:") and z["kind"] == k] for k in BULK_KINDS}
+        virtual = {k: next((z for z in self._data["zones"] if z["id"].startswith("zone:") and z["kind"] == k), None) for k in VIRTUAL}
+        if user_input is not None:
+            kinds = {k: list(user_input.get(k, [])) for k in BULK_KINDS}
+            picked = [a for ids in kinds.values() for a in ids]
+            if len(picked) != len(set(picked)):
+                errors["base"] = "area_in_two_kinds"
+            else:
+                model.set_area_kinds(self._data, kinds, keep=set())
+                for k, names in VIRTUAL.items():
+                    want, have = bool(user_input.get(k)), virtual[k]
+                    if want and not have:
+                        name = names.get(lang, names["en"])
+                        self._data["zones"].append({"id": model.unique_zone_id(name, {z["id"] for z in self._data["zones"]}), "kind": k,
+                                                    "in_home": False, "name": name})
+                    elif have and not want:
+                        self._data["zones"] = [z for z in self._data["zones"] if z["id"] != have["id"]]
+                        self._data["connections"] = [c for c in self._data["connections"] if have["id"] not in (c["a"], c["b"])]
+                return await self.async_step_init()
+        left_out = set(self._data.get("excluded_areas", []))
+        options = [{"value": a["id"], "label": self._floor_label(a)} for a in structure.areas(self.hass) if a["id"] not in left_out]
+        fields: dict = {vol.Optional(k, default=current[k]): _select(options, multiple=True) for k in BULK_KINDS}
+        fields.update({vol.Optional(k, default=bool(virtual[k])): bool for k in VIRTUAL})
+        return self.async_show_form(step_id="zones_bulk", data_schema=vol.Schema(fields), errors=errors)
+
+    # ------------------------------------------------------------------ connections in bulk
+    async def async_step_quick_connect(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Step 1: the space whose neighbours are about to be given."""
+        if user_input is not None:
+            self._origin = user_input["origin"]
+            return await self.async_step_quick_targets()
+        schema = vol.Schema({vol.Required("origin"): _select(self._space_options())})
+        return self.async_show_form(step_id="quick_connect", data_schema=schema)
+
+    async def async_step_quick_targets(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Step 2: every space that touches it, and what separates them (one type for the lot; refine afterwards)."""
+        assert self._origin
+        if user_input is not None:
+            created = model.connect_many(self._data, self._origin, user_input["targets"], user_input["type"], _new_id)
+            self._refine = [c["id"] for c in created if c["separations"][0]["type"] in NEEDS_SENSOR]
+            self._origin = None
+            return await self.async_step_refine()
+        linked = {c["b"] if c["a"] == self._origin else c["a"] for c in self._data["connections"] if self._origin in (c["a"], c["b"])}
+        options = [o for o in self._space_options() if o["value"] != self._origin and o["value"] not in linked]
+        if not options:
+            return await self.async_step_init()
+        schema = vol.Schema({vol.Required("targets"): _select(options, multiple=True),
+                             vol.Required("type", default="door"): _select(SEPARATION_TYPES, "separation_type")})
+        return self.async_show_form(step_id="quick_targets", data_schema=schema, description_placeholders={
+            "origin": self._name(self._origin), "linked": ", ".join(sorted(self._name(s) for s in linked)) or "-"})
+
+    def _sensor_selector(self, conn: dict) -> sel.EntitySelector:
+        """Door, window and cover entities of the two areas when there are some; every such entity of the home otherwise."""
+        areas = [s[5:] for s in (conn["a"], conn["b"]) if s.startswith("area:")]
+        found = structure.candidate_sensors(self.hass, areas) if areas else []
+        return sel.EntitySelector(sel.EntitySelectorConfig(include_entities=found) if found else sel.EntitySelectorConfig(domain=SENSOR_DOMAINS))
+
+    async def async_step_refine(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """The connections just created, one at a time: correct the type and tell which sensor says whether it is open (empty = leave as is)."""
+        while self._refine and not any(c["id"] == self._refine[0] for c in self._data["connections"]):
+            self._refine.pop(0)
+        if not self._refine:
+            return await self.async_step_init()
+        conn = next(c for c in self._data["connections"] if c["id"] == self._refine[0])
+        sep = conn["separations"][0]
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            kind, sensor = user_input["type"], user_input.get("sensor")
+            if kind in PERMANENT and sensor:
+                errors["sensor"] = "sensor_not_needed"
+            else:
+                sep["type"] = kind
+                if sensor:
+                    sep["sensor"] = sensor
+                else:
+                    sep.pop("sensor", None)
+                self._refine.pop(0)
+                return await self.async_step_refine()
+        fields: dict = {vol.Required("type", default=sep["type"]): _select(SEPARATION_TYPES, "separation_type")}
+        fields[vol.Optional("sensor")] = self._sensor_selector(conn)
+        return self.async_show_form(step_id="refine", data_schema=vol.Schema(fields), errors=errors,
+                                    description_placeholders={"connection": self._label(conn), "left": str(len(self._refine))})
 
     # ------------------------------------------------------------------ zones
     async def async_step_add_zone(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
@@ -187,7 +301,7 @@ class HomeStructureOptionsFlow(OptionsFlowWithReload):
                 return await self.async_step_init()
         schema = vol.Schema({
             vol.Required("type", default="door"): _select(SEPARATION_TYPES, "separation_type"),
-            vol.Optional("sensor"): sel.EntitySelector(sel.EntitySelectorConfig(domain=SENSOR_DOMAINS)),
+            vol.Optional("sensor"): self._sensor_selector(self._conn),
             vol.Optional("add_another", default=False): bool,
         })
         return self.async_show_form(step_id="separation", data_schema=schema, errors=errors,

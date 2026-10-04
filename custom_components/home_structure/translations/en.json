@@ -14,11 +14,14 @@
     "step": {
       "init": {
         "title": "Home Structure",
-        "description": "Rooms are your Home Assistant areas. Add zones for spaces that are not rooms (garden, street, building hall…), then connect the spaces that are next to each other.",
+        "description": "1. Choose which Home Assistant areas belong to the structure. 2. Say which ones are gardens, halls, balconies… 3. Connect the spaces that touch each other. Save when you are done.",
         "menu_options": {
-          "add_zone": "Add a zone",
+          "choose_spaces": "Choose the spaces (areas)",
+          "zones_bulk": "Mark gardens, halls and other zones",
+          "quick_connect": "Connect spaces quickly",
+          "add_zone": "Add a single zone (street, neighbour…)",
           "choose_zone": "Edit or remove a zone",
-          "add_connection": "Connect two spaces",
+          "add_connection": "Connect two spaces one by one",
           "choose_connection": "Edit or remove a connection",
           "finish": "Save and close"
         }
@@ -95,6 +98,66 @@
           "add_separation": "Add a separation",
           "remove_connection": "Remove the whole connection"
         }
+      },
+      "choose_spaces": {
+        "title": "Spaces of the structure",
+        "description": "Untick the areas that are not places of your home (technical groupings, for example). Unticked areas are ignored; their zones and connections are removed.",
+        "data": {
+          "areas": "Areas"
+        },
+        "data_description": {
+          "areas": "Every area is ticked by default. The floor of each area is shown to help you choose."
+        }
+      },
+      "zones_bulk": {
+        "title": "Gardens, halls and other zones",
+        "description": "Pick the areas that are not ordinary rooms, by kind. Gardens, balconies, terraces, courtyards and garages count as part of the home; halls, stairwells and shared areas do not (change this zone by zone in “Edit or remove a zone”).",
+        "data": {
+          "garden": "Gardens",
+          "balcony": "Balconies",
+          "terrace": "Terraces",
+          "courtyard": "Courtyards",
+          "garage": "Garages",
+          "hall": "Halls or landings",
+          "stairwell": "Stairwells",
+          "common_area": "Shared areas of the building",
+          "other": "Other zones",
+          "street": "Add the street",
+          "neighbor": "Add a neighbouring home"
+        },
+        "data_description": {
+          "street": "A space with no Home Assistant area.",
+          "neighbor": "A space with no Home Assistant area."
+        }
+      },
+      "quick_connect": {
+        "title": "Connect spaces quickly",
+        "description": "Choose a space, then you will pick everything that touches it.",
+        "data": {
+          "origin": "Space"
+        }
+      },
+      "quick_targets": {
+        "title": "What touches {origin}?",
+        "description": "Already connected: {linked}. Tick every other space that touches it and say what separates them; you can refine each connection afterwards.",
+        "data": {
+          "targets": "Spaces that touch it",
+          "type": "What separates them"
+        },
+        "data_description": {
+          "type": "Used for all the spaces ticked here."
+        }
+      },
+      "refine": {
+        "title": "Refine a connection",
+        "description": "{connection}\nCorrect what separates them if needed, and choose the sensor that says whether it is open. Leave the sensor empty to skip. Left after this one: {left}.",
+        "data": {
+          "type": "Separation",
+          "sensor": "Opening sensor (optional)"
+        },
+        "data_description": {
+          "sensor": "Only door, window and cover entities of the two areas are listed when there are some."
+        }
       }
     },
     "error": {
@@ -102,7 +165,8 @@
       "duplicate_zone_name": "Another space already has this name.",
       "area_already_zone": "This area is already a zone.",
       "same_space": "Choose two different spaces.",
-      "sensor_not_needed": "An open space, an opening and a wall have no sensor."
+      "sensor_not_needed": "An open space, an opening and a wall have no sensor.",
+      "area_in_two_kinds": "An area can only have one kind. Remove it from one of the lists."
     },
     "abort": {
       "duplicate_zone_name": "Two zones have the same name.",

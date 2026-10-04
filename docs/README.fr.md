@@ -33,6 +33,16 @@ Elle ne fait rien du son, de la lumière, de la chaleur ni de la présence. Elle
   Une porte et une porte vitrée entre les deux mêmes espaces sont deux séparations d'une seule liaison.
 - **Capteurs.** Une séparation qui peut changer peut avoir un `binary_sensor` (contact de porte ou de fenêtre) ou un `cover` (volet). Son état devient `open`, `closed`, `partial` (un volet entre 1 et 99 %, ou en mouvement) ou `unknown` (pas de capteur, ou il ne répond pas).
 
+## Configuration
+
+*Paramètres → Appareils et services → Home Structure → Configurer*, trois étapes rapides, puis **Enregistrer et fermer** :
+
+1. **Choisir les espaces.** Toutes les pièces Home Assistant sont cochées ; décochez celles qui ne sont pas des lieux de votre logement. L'étage de chaque pièce est indiqué pour vous aider. Rien n'est deviné d'après les noms ou les étages.
+2. **Marquer jardins, halls et autres zones** sur un seul écran : une liste par type (jardins, balcons, terrasses, cours, garages, halls, cages d'escalier, parties communes), plus deux interrupteurs pour la rue et un logement voisin. Le type décide si la zone fait partie du logement (un jardin oui, un hall d'immeuble non) ; modifiable zone par zone.
+3. **Relier des espaces rapidement.** Choisissez un espace, cochez tout ce qui le touche, indiquez ce qui les sépare ; affinez ensuite chaque liaison (type et capteur d'ouverture). Seuls les capteurs de porte, de fenêtre et les volets des deux pièces sont proposés.
+
+Les anciens écrans, un par un, restent disponibles.
+
 ## Ce que vous obtenez
 
 - **Un capteur par séparation**, avec l'état ouvert, fermé ou partiel (inconnu quand il ne peut pas être lu) et les attributs `type`, `space_a`, `space_b`, `name_a`, `name_b`, `sensor` et `position`. Utilisable dans les automatisations, les modèles et les tableaux de bord.

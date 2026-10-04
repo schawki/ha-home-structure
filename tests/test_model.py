@@ -71,3 +71,30 @@ def test_build_reads_states_and_fixed_types():
 def test_defaults_by_kind():
     assert model.default_in_home("garden") and model.default_in_home("balcony")
     assert not model.default_in_home("street") and not model.default_in_home("hall") and not model.default_in_home("neighbor")
+
+
+def test_excluded_areas_are_not_spaces_and_their_connections_go():
+    data = {k: list(v) for k, v in DATA.items()}
+    model.exclude_areas(data, {"jardin"})
+    ids = {s["id"] for s in model.spaces(data, AREAS)}
+    assert "area:jardin" not in ids and data["excluded_areas"] == ["jardin"]
+    assert all("area:jardin" not in (c["a"], c["b"]) for c in data["connections"]) and "area:jardin" not in {z["id"] for z in data["zones"]}
+    assert model.validate(data, {a["id"] for a in AREAS}) == []
+
+
+def test_set_area_kinds_in_bulk_keeps_what_is_unchanged():
+    data = {"zones": [{"id": "area:jardin", "kind": "garden", "in_home": False, "name": "Mon jardin"}], "connections": []}
+    model.set_area_kinds(data, {"garden": ["jardin"], "hall": ["hall"]}, keep=set())
+    by = {z["id"]: z for z in data["zones"]}
+    assert by["area:jardin"]["in_home"] is False and by["area:jardin"]["name"] == "Mon jardin"   # same kind: untouched
+    assert by["area:hall"] == {"id": "area:hall", "kind": "hall", "in_home": False}              # in_home follows the kind
+    model.set_area_kinds(data, {"garden": []}, keep=set())
+    assert data["zones"] == []
+
+
+def test_connect_many_skips_existing_pairs():
+    data = {"zones": [], "connections": [{"id": "c", "a": "area:salon", "b": "area:entree", "separations": [{"id": "s", "type": "wall"}]}]}
+    n = iter(range(100))
+    made = model.connect_many(data, "area:salon", ["area:entree", "area:jardin", "area:salon"], "opening", lambda: f"i{next(n)}")
+    assert [(c["a"], c["b"]) for c in made] == [("area:salon", "area:jardin")] and len(data["connections"]) == 2
+    assert data["connections"][0]["separations"] == [{"id": "s", "type": "wall"}]                # untouched

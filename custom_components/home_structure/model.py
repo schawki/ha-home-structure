@@ -2,6 +2,7 @@
 
 Data (stored in the options of the config entry):
 
+    excluded_areas: [area id]    Home Assistant areas left out of the structure (technical groupings, for example); every other area is a room
     zones:       [{id, kind, in_home, name?}]   spaces other than rooms; id is "zone:<slug>", or "area:<area id>" to give a kind to a Home Assistant area
     connections: [{id, a, b, separations: [{id, type, sensor?}]}]   a and b are space ids; two spaces with no connection are not adjacent
 
@@ -38,8 +39,11 @@ def spaces(data: dict, areas: list[dict]) -> list[dict]:
 
     `areas` is [{"id", "name"}]. Each space is {id, name, kind, in_home, area_id}."""
     zones = {z["id"]: z for z in data.get("zones", [])}
+    left_out = set(data.get("excluded_areas", []))
     out = []
     for a in areas:
+        if a["id"] in left_out:
+            continue
         sid = f"area:{a['id']}"
         z = zones.get(sid)
         out.append({"id": sid, "name": (z or {}).get("name") or a["name"], "kind": z["kind"] if z else "room",
@@ -53,7 +57,7 @@ def spaces(data: dict, areas: list[dict]) -> list[dict]:
 def validate(data: dict, area_ids: set[str]) -> list[str]:
     """Error codes (also translation keys of the options flow); empty when the structure is consistent."""
     errors: list[str] = []
-    known = {f"area:{a}" for a in area_ids} | {z["id"] for z in data.get("zones", []) if z["id"].startswith("zone:")}
+    known = {f"area:{a}" for a in area_ids if a not in set(data.get("excluded_areas", []))} | {z["id"] for z in data.get("zones", []) if z["id"].startswith("zone:")}
     names = [z["name"].casefold() for z in data.get("zones", []) if z.get("name")]
     if len(names) != len(set(names)):
         errors.append("duplicate_zone_name")
@@ -131,3 +135,44 @@ def neighbours(structure: dict, space_id: str) -> list[str]:
 
 def default_in_home(kind: str) -> bool:
     return ZONE_IN_HOME.get(kind, False)
+
+
+def exclude_areas(data: dict, area_ids: set[str]) -> None:
+    """Leaves the given areas out of the structure, with their zone entry and their connections."""
+    data["excluded_areas"] = sorted(area_ids)
+    gone = {f"area:{a}" for a in area_ids}
+    data["zones"] = [z for z in data.get("zones", []) if z["id"] not in gone]
+    data["connections"] = [c for c in data.get("connections", []) if c["a"] not in gone and c["b"] not in gone]
+
+
+def set_area_kinds(data: dict, kinds: dict[str, list[str]], keep: set[str]) -> None:
+    """Gives each listed area its zone kind (garden, hall…) in one go. `kinds` is {kind: [area id]}.
+
+    An area that already has a zone entry of the same kind keeps it (name, in_home); one that is no longer listed loses its entry, except
+    the ids in `keep`. in_home follows the kind (default_in_home), and can be changed afterwards zone by zone."""
+    wanted = {f"area:{a}": k for k, ids in kinds.items() for a in ids}
+    old = {z["id"]: z for z in data.get("zones", [])}
+    zones = [z for z in data.get("zones", []) if not z["id"].startswith("area:") or z["id"] in keep]
+    for sid, kind in wanted.items():
+        if sid in keep:
+            continue
+        prev = old.get(sid)
+        zones.append(prev if prev and prev["kind"] == kind else {"id": sid, "kind": kind, "in_home": default_in_home(kind),
+                                                                  **({"name": prev["name"]} if prev and prev.get("name") else {})})
+    data["zones"] = zones
+
+
+def connect_many(data: dict, origin: str, targets: list[str], separation_type: str, new_id: Callable[[], str]) -> list[dict]:
+    """Connects `origin` to every target with one separation of the given type. Pairs that are already connected are left as they are.
+
+    Returns the connections created."""
+    have = {frozenset((c["a"], c["b"])) for c in data.get("connections", [])}
+    created = []
+    for t in targets:
+        if t == origin or frozenset((origin, t)) in have:
+            continue
+        conn = {"id": new_id(), "a": origin, "b": t, "separations": [{"id": new_id(), "type": separation_type}]}
+        data.setdefault("connections", []).append(conn)
+        created.append(conn)
+        have.add(frozenset((origin, t)))
+    return created
