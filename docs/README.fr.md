@@ -35,13 +35,14 @@ Elle ne fait rien du son, de la lumière, de la chaleur ni de la présence. Elle
 
 ## Configuration
 
-*Paramètres → Appareils et services → Home Structure → Configurer*, trois étapes rapides, puis **Enregistrer et fermer** :
+Ouvrez **Home Structure** dans la barre latérale. Vous voyez un plan que vous organisez vous-même ; tout ce que vous faites est enregistré immédiatement et annulable :
 
-1. **Choisir les espaces.** Toutes les pièces Home Assistant sont cochées ; décochez celles qui ne sont pas des lieux de votre logement. L'étage de chaque pièce est indiqué pour vous aider. Rien n'est deviné d'après les noms ou les étages.
-2. **Marquer jardins, halls et autres zones** sur un seul écran : une liste par type (jardins, balcons, terrasses, cours, garages, halls, cages d'escalier, parties communes), plus deux interrupteurs pour la rue et un logement voisin. Le type décide si la zone fait partie du logement (un jardin oui, un hall d'immeuble non) ; modifiable zone par zone.
-3. **Relier des espaces rapidement.** Choisissez un espace, cochez tout ce qui le touche, indiquez ce qui les sépare ; affinez ensuite chaque liaison (type et capteur d'ouverture). Seuls les capteurs de porte, de fenêtre et les volets des deux pièces sont proposés.
+1. **Ajouter vos pièces.** La colonne de gauche liste les pièces Home Assistant qui ne sont pas encore sur le plan. Cliquez sur **Tout ajouter** (elles sont rangées en une colonne par étage, que vous déplacez ensuite), ou glissez ou cliquez seulement celles que vous voulez. Les pièces laissées dans la colonne sont ignorées. Rien n'est deviné d'après les noms.
+2. **Les déplacer** où vous voulez, pour que le plan ressemble à votre logement. **Réorganiser** remet tout en ordre par étage.
+3. **Les relier.** Glissez la poignée ● d'une pièce sur la pièce voisine. Cliquez sur le lien pour dire ce qui les sépare (espace ouvert, porte, porte vitrée, fenêtre, volet, mur…), choisissez le capteur d'ouverture parmi les portes, fenêtres et volets des deux pièces, et ajoutez une deuxième séparation s'il y en a une. Le lien affiche l'état en direct de chaque séparation (ouvert, fermé, partiel).
+4. **Ajouter l'extérieur** avec **+ Zone** : jardin, balcon, hall, cage d'escalier, rue, logement voisin… Le type décide si la zone fait partie du logement ; modifiable. Une pièce peut aussi devenir un type de zone (une pièce « Garage » peut être marquée garage), et une pièce peut être scindée en créant une zone à côté.
 
-Les anciens écrans, un par un, restent disponibles.
+Sur un écran étroit, le plan devient une liste avec les mêmes possibilités. Les anciens écrans (*Configurer* sur l'intégration) fonctionnent toujours et modifient les mêmes données.
 
 ## Ce que vous obtenez
 

@@ -1,0 +1,43 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --primary-color:#03a9f4; --primary-background-color:#fafafa; --card-background-color:#fff; --primary-text-color:#212121; --secondary-text-color:#727272; --divider-color:#e0e0e0; --secondary-background-color:#e5e5e5; --text-primary-color:#fff; --success-color:#43a047; --error-color:#db4437; --warning-color:#ffa600; }
+  body { margin: 0; }
+</style></head>
+<body>
+<script type="module" src="/panel.js"></script>
+<script type="module">
+  // Stand-in for Home Assistant: answers the panel's WebSocket commands and records every call.
+  const q = new URLSearchParams(location.search);
+  const S = window.__s = { calls: [], saves: [], fail: q.get("fail") };
+  const areas = [
+    { id: "salon", name: "Salon", floor: "RDC" }, { id: "cuisine", name: "Cuisine", floor: "RDC" }, { id: "entree", name: "Entrée", floor: "RDC" },
+    { id: "chambre", name: "Chambre", floor: "Étage" }, { id: "bureau", name: "Bureau", floor: "Étage" }, { id: "cave", name: "Cave", floor: null },
+  ];
+  let options = { zones: [], connections: [], excluded_areas: [], layout: {} };
+  if (q.get("legacy")) options = { zones: [], connections: [{ id: "c1", a: "area:salon", b: "area:cuisine", separations: [{ id: "s1", type: "door", sensor: "binary_sensor.porte" }] }], excluded_areas: [], layout: {} };
+  S.options = options;
+  const kinds = ["garden", "balcony", "terrace", "courtyard", "garage", "hall", "stairwell", "common_area", "street", "neighbor", "other"];
+  const inHome = { garden: true, balcony: true, terrace: true, courtyard: false, garage: true, hall: false, stairwell: false, common_area: false, street: false, neighbor: false, other: false };
+  const hass = {
+    language: q.get("lang") || "en",
+    states: { "binary_sensor.porte": { state: "off", attributes: {} }, "cover.volet": { state: "open", attributes: { current_position: 40 } } },
+    async callWS(msg) {
+      S.calls.push(msg.type);
+      if (msg.type === "home_structure/get") return { areas, options: JSON.parse(JSON.stringify(S.options)), kinds, types: ["open_space", "opening", "door", "glass_door", "window", "shutter", "wall"], in_home: inHome, permanent: { open_space: "open", opening: "open", wall: "closed" }, sensor_domains: ["binary_sensor", "cover"] };
+      if (msg.type === "home_structure/save") {
+        if (S.fail === "save") throw { message: "boom" };
+        S.options = JSON.parse(JSON.stringify(msg.options)); S.saves.push(S.options);
+        return { options: S.options, rebuilt: true };
+      }
+      if (msg.type === "home_structure/candidates") return { sensors: [{ entity_id: "binary_sensor.porte", name: "Porte", state: "off" }, { entity_id: "cover.volet", name: "Volet", state: "open" }], filtered: true };
+      throw new Error("unknown " + msg.type);
+    },
+  };
+  window.__hass = hass;
+  const el = document.createElement("home-structure-panel");
+  el.hass = hass; el.narrow = q.get("narrow") === "1";
+  document.body.append(el);
+  window.__panel = el;
+</script>
+</body></html>

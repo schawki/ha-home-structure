@@ -3,6 +3,7 @@
 Data (stored in the options of the config entry):
 
     excluded_areas: [area id]    Home Assistant areas left out of the structure (technical groupings, for example); every other area is a room
+    layout:      {space id: {x, y}}              where each space sits on the plan of the editor panel; a space without a position is not on the plan yet
     zones:       [{id, kind, in_home, name?}]   spaces other than rooms; id is "zone:<slug>", or "area:<area id>" to give a kind to a Home Assistant area
     connections: [{id, a, b, separations: [{id, type, sensor?}]}]   a and b are space ids; two spaces with no connection are not adjacent
 
@@ -176,3 +177,19 @@ def connect_many(data: dict, origin: str, targets: list[str], separation_type: s
         created.append(conn)
         have.add(frozenset((origin, t)))
     return created
+
+
+def apply_layout(data: dict, area_ids: set[str]) -> None:
+    """Called when the editor panel saves: an area with no position on the plan is not part of the structure (it waits in the tray).
+
+    It is left out, with its zone entry and its connections; every other area stays a room. Virtual zones always have a position."""
+    layout = data.get("layout") or {}
+    data["layout"] = {k: v for k, v in layout.items() if isinstance(v, dict) and isinstance(v.get("x"), (int, float)) and isinstance(v.get("y"), (int, float))}
+    exclude_areas(data, {a for a in area_ids if f"area:{a}" not in data["layout"]})
+    known = {f"area:{a}" for a in area_ids if a not in set(data["excluded_areas"])} | {z["id"] for z in data["zones"] if z["id"].startswith("zone:")}
+    data["layout"] = {k: v for k, v in data["layout"].items() if k in known}
+
+
+def structural(data: dict) -> dict:
+    """The part of the data that the sensors and other integrations depend on (everything but the positions on the plan)."""
+    return {k: data.get(k) for k in ("zones", "connections", "excluded_areas")}

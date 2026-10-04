@@ -37,13 +37,14 @@ It does not do anything with sound, light, heat or presence. It only keeps the d
 
 ## Setting it up
 
-*Settings → Devices & services → Home Structure → Configure*, three quick steps, then **Save and close**:
+Open **Home Structure** in the sidebar. You see a plan you arrange yourself, and everything you do is saved immediately and can be undone:
 
-1. **Choose the spaces.** Every Home Assistant area is ticked; untick the ones that are not places of your home. The floor of each area is shown to help you choose. Nothing is guessed from names or floors.
-2. **Mark gardens, halls and other zones** in one screen: one list per kind (gardens, balconies, terraces, courtyards, garages, halls, stairwells, shared areas), plus two switches for the street and a neighbouring home. The kind decides whether the zone is part of the home (a garden is, a building hall is not); change it zone by zone if needed.
-3. **Connect spaces quickly.** Pick a space, tick everything that touches it, say what separates them; then refine each new connection (type and opening sensor). Only door, window and cover entities of the two areas are offered as sensors.
+1. **Add your rooms.** The left column lists the Home Assistant areas that are not on the plan yet. Click **Add all** (they are laid out in one column per floor, which you can then move around), or drag or click only the ones you want. Areas left in the column are ignored. Nothing is guessed from names.
+2. **Move them** wherever makes sense to you, so the plan looks like your home. **Rearrange** lays everything out again by floor.
+3. **Connect them.** Drag the ● handle of a room onto the room next to it. Click the link to say what separates them (open space, door, glass door, window, shutter, wall…), pick the opening sensor from the door, window and cover entities of the two rooms, and add a second separation if there is one. The link shows the live state of each separation (open, closed, partly open).
+4. **Add what is outside** with **+ Zone**: garden, balcony, hall, stairwell, street, a neighbouring home… The kind decides whether the zone is part of the home; you can change it. A room can also be turned into a zone kind (an area named "Garage" can be marked as a garage), and a room can be split by creating a zone next to it.
 
-The older one-by-one screens remain available.
+On a narrow screen the plan becomes a list with the same editing. The older configuration screens (*Configure* on the integration) still work and edit the same data.
 
 ## What you get
 

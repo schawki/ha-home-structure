@@ -1,14 +1,21 @@
 {
   "domain": "home_structure",
   "name": "Home Structure",
-  "codeowners": ["@schawki"],
+  "codeowners": [
+    "@schawki"
+  ],
   "config_flow": true,
-  "dependencies": [],
+  "dependencies": [
+    "frontend",
+    "http",
+    "panel_custom",
+    "websocket_api"
+  ],
   "documentation": "https://github.com/schawki/ha-home-structure",
   "integration_type": "service",
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/schawki/ha-home-structure/issues",
   "requirements": [],
   "single_config_entry": true,
-  "version": "0.2.0"
+  "version": "0.3.0"
 }

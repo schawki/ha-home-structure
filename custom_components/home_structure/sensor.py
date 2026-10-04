@@ -4,6 +4,7 @@ from __future__ import annotations
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.event import async_track_state_change_event
@@ -14,6 +15,11 @@ from .const import DOMAIN, PERMANENT, STATES
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddConfigEntryEntitiesCallback) -> None:
     names = {s["id"]: s["name"] for s in model.spaces(entry.options, structure.areas(hass))}
+    wanted = {f"{entry.entry_id}_{s['id']}" for c in entry.options.get("connections", []) for s in c["separations"]}
+    registry = er.async_get(hass)
+    for reg in er.async_entries_for_config_entry(registry, entry.entry_id):       # separations that were removed leave no dead entity behind
+        if reg.unique_id not in wanted:
+            registry.async_remove(reg.entity_id)
     async_add_entities(
         SeparationSensor(entry, c, s, names.get(c["a"], c["a"]), names.get(c["b"], c["b"]))
         for c in entry.options.get("connections", []) for s in c["separations"]

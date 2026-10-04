@@ -49,3 +49,21 @@ def current(hass: HomeAssistant, entry: ConfigEntry) -> dict:
 
     return model.build(entry.options, areas(hass), read,
                        lambda sid: registry.async_get_entity_id("sensor", DOMAIN, f"{entry.entry_id}_{sid}"))
+
+
+def sensor_candidates(hass: HomeAssistant, area_ids: list[str]) -> list[dict]:
+    """Door, window and cover entities of the given areas, for the editor panel."""
+    registry = er.async_get(hass)
+    out = []
+    for entity_id in candidate_sensors(hass, area_ids):
+        st = hass.states.get(entity_id)
+        reg = registry.async_get(entity_id)
+        out.append({"entity_id": entity_id, "name": (st.name if st else None) or (reg.name or reg.original_name if reg else None) or entity_id,
+                    "state": st.state if st else "unknown"})
+    return out
+
+
+def all_sensors(hass: HomeAssistant) -> list[dict]:
+    """Every binary_sensor and cover (fallback when no candidate is found in the two areas)."""
+    return [{"entity_id": s.entity_id, "name": s.name, "state": s.state} for s in sorted(
+        (*hass.states.async_all("binary_sensor"), *hass.states.async_all("cover")), key=lambda s: s.name.casefold())]
