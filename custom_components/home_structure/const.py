@@ -21,8 +21,16 @@ ZONE_KINDS = ["garden", "balcony", "terrace", "courtyard", "garage", "hall", "st
 ZONE_IN_HOME = {"garden": True, "balcony": True, "terrace": True, "courtyard": True, "garage": True,
                 "hall": False, "stairwell": False, "common_area": False, "street": False, "neighbor": False, "other": False}
 
-# What an ordinary room is used for (optional, chosen by the user, never guessed from a name). Zones have their own kinds above.
-ROOM_TYPES = ["bedroom", "bathroom", "toilet", "kitchen", "living_room", "dining_room", "office", "hallway", "entrance", "dressing",
-              "laundry", "storage", "utility_room"]
+# What an ordinary room is used for (optional, chosen by the user, never guessed from a name), organised in groups.
+# Zones have their own kinds above. Integrations read the type as `room_type`; a type is never removed once released.
+ROOM_TYPE_GROUPS = {
+    "sleeping": ["bedroom", "master_bedroom", "child_bedroom", "nursery", "guest_room"],
+    "living": ["living_room", "dining_room", "game_room", "home_cinema", "gym"],
+    "work": ["office", "workshop"],
+    "water": ["bathroom", "toilet"],
+    "service": ["kitchen", "pantry", "laundry", "utility_room", "dressing", "storage", "cellar", "attic"],
+    "circulation": ["hallway", "entrance", "staircase"],
+}
+ROOM_TYPES = [t for group in ROOM_TYPE_GROUPS.values() for t in group]
 
 STATES = ["open", "closed", "partial"]   # a separation whose state cannot be read is "unknown"

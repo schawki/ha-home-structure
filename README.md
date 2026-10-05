@@ -19,7 +19,7 @@ It does not do anything with sound, light, heat or presence. It only keeps the d
   - *outside it*: the hall or landing, the stairwell, a shared area of the building, the street, a neighbouring home.
 
   If a zone already exists as a Home Assistant area (a garden with a camera, a building hall with a doorbell), you give that area a kind and say whether it is part of the home; its devices stay where they are. Zones with no area (the street, the neighbour) are created in Home Structure.
-- **Types of room.** An ordinary room can be given a type, chosen by you and never guessed from its name: bedroom, bathroom, toilet, kitchen, living room, dining room, office, hallway, entrance, dressing room, laundry room, storage, utility room (a garage is a kind of zone). It is optional, and only rooms have one. Integrations read it as `room_type` to adapt to what a room is used for.
+- **Types of room.** An ordinary room can be given a type, chosen by you and never guessed from its name: organised in groups: sleeping (bedroom, master bedroom, child's bedroom, baby's room, guest room), living and leisure (living room, dining room, game room, home cinema, gym), work (office, workshop), bathrooms (bathroom, toilet), kitchen and utility (kitchen, pantry, laundry room, utility room, dressing room, storage, cellar, attic) and circulation (hallway, entrance, staircase). A garage is a kind of zone. A released type is never removed. It is optional, and only rooms have one. Integrations read it as `room_type` to adapt to what a room is used for.
 - **Connections.** Two spaces that are next to each other are connected. Two spaces with no connection are not adjacent.
 - **Separations.** A connection has one or more separations, and each has a type:
 
@@ -45,7 +45,7 @@ Open **Home Structure** in the sidebar. You see a plan you arrange yourself, and
 1. **Add your rooms.** The left column lists the Home Assistant areas that are not on the plan yet. Click **Add all** (they are laid out in one column per floor, which you can then move around), or drag or click only the ones you want. Areas left in the column are ignored. Nothing is guessed from names.
 2. **Move them** wherever makes sense to you, so the plan looks like your home. **Rearrange** lays everything out again by floor.
 3. **Connect them.** Drag the ● handle of a room onto the room next to it. Click the link to say what separates them (open space, door, glass door, grille, window, shutter, wall…), pick the opening sensor from the door, window and cover entities of the two rooms, pick the shutter in front of a window or door if there is one, and add a second separation if there is another. The link shows the live state of each separation (open, closed, partly open).
-4. **Give each room its type** in its panel (bedroom, bathroom, dressing room…), or leave it unspecified. One list covers rooms and outside spaces.
+4. **Give each room its type** in its panel (bedroom, nursery, gym, dressing room…), or leave it unspecified. One list covers rooms and outside spaces.
 5. **Add what is outside** with **+ Zone**: garden, balcony, hall, stairwell, street, a neighbouring home… The kind decides whether the zone is part of the home; you can change it. A room can also be turned into a zone kind (an area named "Garage" can be marked as a garage), and a room can be split by creating a zone next to it.
 
 On a narrow screen the plan becomes a list with the same editing. The older configuration screens (*Configure* on the integration) still work and edit the same data.

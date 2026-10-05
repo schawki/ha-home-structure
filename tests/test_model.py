@@ -136,3 +136,11 @@ def test_room_types_follow_the_rooms_that_leave_the_structure():
     model.apply_layout(data, {"salon", "cuisine", "jardin"})                      # cuisine has no position: left out; jardin is a zone; x is unknown
     assert data["room_types"] == {"area:salon": "living_room"}
     assert "room_types" not in model.structural(data)                              # a type alone never rebuilds the sensors
+
+
+def test_every_room_type_is_valid_and_the_released_ones_stay():
+    from custom_components.home_structure.const import ROOM_TYPE_GROUPS, ROOM_TYPES
+    released = {"bedroom", "bathroom", "toilet", "kitchen", "living_room", "dining_room", "office", "hallway", "entrance", "dressing", "laundry", "storage", "utility_room"}
+    assert released <= set(ROOM_TYPES) and len(ROOM_TYPES) == len(set(ROOM_TYPES)) == sum(len(g) for g in ROOM_TYPE_GROUPS.values())
+    for t in ROOM_TYPES:
+        assert model.validate({**DATA, "room_types": {"area:salon": t}}, {"salon", "entree", "jardin", "hall"}) == []

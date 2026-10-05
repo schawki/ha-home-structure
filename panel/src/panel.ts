@@ -427,7 +427,9 @@ class HomeStructurePanel extends LitElement {
     const linked = new Set(mine.flatMap((c) => [c.a, c.b]));
     const others = this.spaces().filter((x) => !linked.has(x.id));
     const isArea = s.id.startsWith("area:");
-    const inside = isArea ? [...this.boot!.room_types.map((v) => ({ value: v, label: this.t(`rt_${v}` as Key) })), { value: "garage", label: this.kindLabel("garage") }] : [];
+    const groups = isArea ? Object.entries(this.boot!.room_type_groups).map(([g, types]) => ({
+      label: this.t(`rg_${g}` as Key),
+      options: [...types.map((v) => ({ value: v, label: this.t(`rt_${v}` as Key) })), ...(g === "service" ? [{ value: "garage", label: this.kindLabel("garage") }] : [])] })) : [];
     const outside = this.boot!.kinds.filter((k) => !isArea || k !== "garage").map((k) => ({ value: k, label: this.kindLabel(k) }));
     const current = s.kind === "room" ? s.room_type ?? "" : s.kind;
     return html`<aside class="drawer" data-drawer="space">
@@ -436,7 +438,7 @@ class HomeStructurePanel extends LitElement {
         : html`<label>${this.t("zoneName")}<input class="name" .value=${s.name} @change=${(e: Event) => this.renameZone(s, (e.target as HTMLInputElement).value)}></label>`}
       <label>${this.t("zoneKind")}<select class="kind" .value=${current} @change=${(e: Event) => this.setType(s, (e.target as HTMLSelectElement).value)}>
         ${isArea ? html`<option value="" ?selected=${current === ""}>${this.t("typeNotSet")}</option>` : nothing}
-        ${inside.length ? html`<optgroup label=${this.t("groupInside")}>${inside.map((o) => html`<option value=${o.value} ?selected=${o.value === current}>${o.label}</option>`)}</optgroup>` : nothing}
+        ${groups.map((g) => html`<optgroup label=${g.label}>${g.options.map((o) => html`<option value=${o.value} ?selected=${o.value === current}>${o.label}</option>`)}</optgroup>`)}
         <optgroup label=${this.t("groupOutside")}>${outside.map((o) => html`<option value=${o.value} ?selected=${o.value === current}>${o.label}</option>`)}</optgroup></select></label>
       ${s.kind === "room" ? nothing : html`<label class="check"><input type="checkbox" class="inhome" .checked=${s.in_home} @change=${(e: Event) => this.setInHome(s, (e.target as HTMLInputElement).checked)}>${this.t("partOfHome")}</label>`}
       <h3>${this.t("connections")}</h3>

@@ -34,7 +34,7 @@ async def test_get_lists_areas_with_floors_and_the_vocabulary(hass, hass_ws_clie
     by = {a["name"]: a for a in r["areas"]}
     assert by["Living"]["floor"] == "Ground" and by["Servers"]["floor"] is None
     assert r["options"] == {"zones": [], "connections": [], "excluded_areas": [], "layout": {}, "room_types": {}}
-    assert "dressing" in r["room_types"] and "glass_door" in r["types"] and "hall" in r["kinds"] and r["in_home"]["garden"] is True and r["permanent"]["wall"] == "closed"
+    assert "dressing" in r["room_types"] and "nursery" in r["room_types"] and r["room_type_groups"]["sleeping"][:2] == ["bedroom", "master_bedroom"] and sum(r["room_type_groups"].values(), []) == r["room_types"] and "glass_door" in r["types"] and "hall" in r["kinds"] and r["in_home"]["garden"] is True and r["permanent"]["wall"] == "closed"
 
 
 async def test_save_keeps_placed_areas_and_leaves_the_others_in_the_tray(hass, hass_ws_client, home):
