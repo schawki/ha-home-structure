@@ -65,6 +65,7 @@ def test_build_reads_states_and_fixed_types():
     assert glass["state"] == "unknown"                                                       # sensor missing from the states
     assert (shutter["state"], shutter["position"]) == ("partial", 30)
     assert c["c2"]["a_name"] == "Entrée" and c["c2"]["b_name"] == "Entrée (extérieur)"
+    assert out["layout"] == {}                                                              # positions on the editor plan, for consumers that draw it
     assert model.neighbours(out, "area:salon") == ["area:entree", "area:jardin"]
     assert model.neighbours(out, "zone:rue") == []
 

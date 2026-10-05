@@ -70,7 +70,10 @@ connections:
     a_name: Living room
     b_name: Building hall
     separations:
-      - {id: 7be41d90, type: door, state: open, position: null, sensor: binary_sensor.hall_door, entity_id: sensor.home_structure_living_room_building_hall_door}
+      - {id: 7be41d90, type: door, state: open, position: null, sensor: binary_sensor.hall_door, entity_id: sensor.home_structure_living_room_building_hall_door, shutter: null, shutter_state: null, shutter_position: null}
+layout:   # positions on the editor plan, to draw it
+  "area:living_room": {x: 24, y: 24}
+  "area:hall": {x: 248, y: 24}
 ```
 
 For an integration, reading the structure goes through this service and the `entity_id` of each separation: nothing to import, nothing to install beyond Home Structure.
@@ -81,7 +84,7 @@ English is the reference. French is included. To add a language, see [CONTRIBUTI
 
 ## Status
 
-Version 0.1. Describing the home is done in Configure (menus). A visual editor may come later.
+The home is described in the **Home Structure** panel of the sidebar (a plan you arrange, with autosave and undo). The *Configure* menus of the integration remain as a fallback.
 
 ## Licence
 

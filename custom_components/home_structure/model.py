@@ -137,7 +137,7 @@ def build(data: dict, areas: list[dict], read: StateReader, entity_of: Callable[
             seps.append({"id": s["id"], "type": s["type"], "state": state, "position": pos, "sensor": s.get("sensor"), "entity_id": entity_of(s["id"]),
                          "shutter": shutter, "shutter_state": sh_state if shutter else None, "shutter_position": sh_pos})
         conns.append({"id": c["id"], "a": c["a"], "b": c["b"], "a_name": names.get(c["a"], c["a"]), "b_name": names.get(c["b"], c["b"]), "separations": seps})
-    return {"spaces": all_spaces, "connections": conns}
+    return {"spaces": all_spaces, "connections": conns, "layout": {k: dict(v) for k, v in (data.get("layout") or {}).items()}}
 
 
 def neighbours(structure: dict, space_id: str) -> list[str]:
