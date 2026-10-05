@@ -57,7 +57,8 @@ def test_build_reads_states_and_fixed_types():
     states = {"binary_sensor.porte": ("on", {}), "cover.volet": ("open", {"current_position": 30})}
     out = model.build(DATA, AREAS, states.get, {"s1": "sensor.a"}.get)
     c = {c["id"]: c for c in out["connections"]}
-    assert c["c1"]["separations"][0] == {"id": "s1", "type": "open_space", "state": "open", "position": None, "sensor": None, "entity_id": "sensor.a"}
+    assert c["c1"]["separations"][0] == {"id": "s1", "type": "open_space", "state": "open", "position": None, "sensor": None, "entity_id": "sensor.a",
+                                            "shutter": None, "shutter_state": None, "shutter_position": None}
     s2, s3 = c["c2"]["separations"]
     assert (s2["state"], s3["state"]) == ("open", "closed")                                  # door open, plain wall: adjacent, no passage
     glass, shutter = c["c3"]["separations"]
@@ -98,3 +99,20 @@ def test_connect_many_skips_existing_pairs():
     made = model.connect_many(data, "area:salon", ["area:entree", "area:jardin", "area:salon"], "opening", lambda: f"i{next(n)}")
     assert [(c["a"], c["b"]) for c in made] == [("area:salon", "area:jardin")] and len(data["connections"]) == 2
     assert data["connections"][0]["separations"] == [{"id": "s", "type": "wall"}]                # untouched
+
+
+def test_a_shutter_sits_in_front_of_a_door_a_glass_door_or_a_window():
+    data = {"zones": [], "connections": [{"id": "c", "a": "area:salon", "b": "area:jardin", "separations": [
+        {"id": "s1", "type": "glass_door", "sensor": "binary_sensor.baie", "shutter": "cover.volet"}, {"id": "s2", "type": "grille"}]}]}
+    assert model.validate(data, {"salon", "jardin"}) == []
+    states = {"binary_sensor.baie": ("off", {}), "cover.volet": ("open", {"current_position": 40})}
+    glass, grille = model.build(data, AREAS, states.get)["connections"][0]["separations"]
+    assert glass["state"] == "closed" and glass["shutter"] == "cover.volet" and glass["shutter_state"] == "partial" and glass["shutter_position"] == 40
+    assert grille["state"] == "unknown" and grille["shutter"] is None and grille["shutter_state"] is None   # a grille may have a sensor but its state barely matters
+    assert model.shutter_state({"shutter": "cover.volet"}, {}.get) == ("unknown", None)                       # cover missing
+
+
+@pytest.mark.parametrize("sep", [{"type": "wall", "shutter": "cover.v"}, {"type": "grille", "shutter": "cover.v"}, {"type": "door", "shutter": "binary_sensor.v"}])
+def test_a_shutter_must_be_a_cover_on_a_door_or_window(sep):
+    data = {"zones": [], "connections": [{"id": "c", "a": "area:salon", "b": "area:jardin", "separations": [{"id": "s", **sep}]}]}
+    assert model.validate(data, {"salon", "jardin"}) == ["invalid_shutter"]

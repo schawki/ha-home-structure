@@ -94,3 +94,17 @@ async def test_removed_separations_leave_no_dead_sensor(hass, hass_ws_client, ho
     await call(await hass_ws_client(hass), "save", options={"zones": [], "connections": [], "layout": {living: {"x": 0, "y": 0}, kitchen: {"x": 1, "y": 1}}})
     await hass.async_block_till_done()
     assert er.async_entries_for_config_entry(reg, entry.entry_id) == []
+
+
+async def test_save_accepts_a_shutter_on_a_window_and_refuses_it_elsewhere(hass, hass_ws_client, home):
+    await setup(hass)
+    client = await hass_ws_client(hass)
+    living, garden = f"area:{home['Living']}", f"area:{home['Garden']}"
+
+    def options(sep):
+        return {"zones": [], "connections": [{"id": "c", "a": living, "b": garden, "separations": [{"id": "s", **sep}]}], "layout": {living: {"x": 0, "y": 0}, garden: {"x": 200, "y": 0}}}
+
+    ok = await call(client, "save", options=options({"type": "window", "sensor": "binary_sensor.w", "shutter": "cover.v"}))
+    assert ok["success"] and ok["result"]["options"]["connections"][0]["separations"][0]["shutter"] == "cover.v"
+    bad = await call(client, "save", options=options({"type": "wall", "shutter": "cover.v"}))
+    assert not bad["success"] and "invalid_shutter" in bad["error"]["message"]

@@ -12,13 +12,14 @@ const EN = {
   zoneName: "Name", zoneKind: "Kind", partOfHome: "Part of the home", create: "Create", cancel: "Cancel",
   kind_room: "Room", kind_garden: "Garden", kind_balcony: "Balcony", kind_terrace: "Terrace", kind_courtyard: "Courtyard", kind_garage: "Garage",
   kind_hall: "Hall or landing", kind_stairwell: "Stairwell", kind_common_area: "Shared area of the building", kind_street: "Street", kind_neighbor: "Neighbouring home", kind_other: "Other",
-  type_open_space: "open space", type_opening: "opening", type_door: "door", type_glass_door: "glass door", type_window: "window", type_shutter: "shutter", type_wall: "wall",
+  type_open_space: "open space", type_opening: "opening", type_door: "door", type_glass_door: "glass door", type_grille: "security grille", type_window: "window", type_shutter: "shutter", type_wall: "wall",
   state_open: "open", state_closed: "closed", state_partial: "partly open", state_unknown: "unknown",
   space: "Space", connections: "Connections", connectTo: "Connect to…", noConnections: "Not connected to anything yet.",
   removeFromPlan: "Put back in the list", deleteZone: "Delete this zone",
   link: "Link", separations: "What separates them", addSeparation: "+ Add a separation", removeLink: "Remove this link", removeSep: "Remove",
   sensor: "Opening sensor", noSensor: "No sensor", sensorsHere: "Door, window and cover entities of the two rooms", sensorsAll: "Nothing found in these rooms: every sensor of the home is listed",
   noSensorNeeded: "No sensor needed: this never changes.",
+  shutter: "Shutter in front (optional)", noShutter: "No shutter", shutterShort: "shutter", shutterHint: "Roller shutters and blinds of the two rooms: a closed shutter behind a closed window blocks more sound.",
   close: "Close", list: "List", plan: "Plan",
 } as const;
 export type Key = keyof typeof EN;
@@ -37,13 +38,14 @@ const FR: Dict = {
   zoneName: "Nom", zoneKind: "Type", partOfHome: "Fait partie du logement", create: "Créer", cancel: "Annuler",
   kind_room: "Pièce", kind_garden: "Jardin", kind_balcony: "Balcon", kind_terrace: "Terrasse", kind_courtyard: "Cour", kind_garage: "Garage",
   kind_hall: "Hall ou palier", kind_stairwell: "Cage d'escalier", kind_common_area: "Partie commune de l'immeuble", kind_street: "Rue", kind_neighbor: "Logement voisin", kind_other: "Autre",
-  type_open_space: "espace ouvert", type_opening: "ouverture", type_door: "porte", type_glass_door: "porte vitrée", type_window: "fenêtre", type_shutter: "volet", type_wall: "mur",
+  type_open_space: "espace ouvert", type_opening: "ouverture", type_door: "porte", type_glass_door: "porte vitrée", type_grille: "grille", type_window: "fenêtre", type_shutter: "volet", type_wall: "mur",
   state_open: "ouvert", state_closed: "fermé", state_partial: "entrouvert", state_unknown: "inconnu",
   space: "Espace", connections: "Liaisons", connectTo: "Relier à…", noConnections: "Pas encore relié à autre chose.",
   removeFromPlan: "Remettre dans la liste", deleteZone: "Supprimer cette zone",
   link: "Liaison", separations: "Ce qui les sépare", addSeparation: "+ Ajouter une séparation", removeLink: "Supprimer cette liaison", removeSep: "Retirer",
   sensor: "Capteur d'ouverture", noSensor: "Aucun capteur", sensorsHere: "Portes, fenêtres et volets des deux pièces", sensorsAll: "Rien trouvé dans ces pièces : tous les capteurs de la maison sont listés",
   noSensorNeeded: "Pas de capteur nécessaire : cela ne change jamais.",
+  shutter: "Volet devant (facultatif)", noShutter: "Aucun volet", shutterShort: "volet", shutterHint: "Volets roulants et stores des deux pièces : un volet fermé devant une fenêtre fermée arrête davantage le son.",
   close: "Fermer", list: "Liste", plan: "Plan",
 };
 

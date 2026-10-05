@@ -24,6 +24,13 @@ export function sepState(sep: Sep, boot: Bootstrap, hass: Hass): SepState {
   return st ? normalize(st.state, st.attributes) : "unknown";
 }
 
+/** State of the shutter in front of a separation; null when it has none. */
+export function shutterState(sep: Sep, hass: Hass): SepState | null {
+  if (!sep.shutter) return null;
+  const st = hass.states[sep.shutter];
+  return st ? normalize(st.state, st.attributes) : "unknown";
+}
+
 /** The spaces on the plan: areas that have a position (rooms, or zones when given a kind) and the virtual zones. */
 export function placedSpaces(boot: Bootstrap, o: Options): Space[] {
   const zones = new Map(o.zones.map((z) => [z.id, z]));

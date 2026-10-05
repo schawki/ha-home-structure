@@ -26,12 +26,14 @@ Elle ne fait rien du son, de la lumière, de la chaleur ni de la présence. Elle
   | `opening` (ouverture) | un passage sans porte | toujours ouvert |
   | `door` (porte) | une porte | selon son capteur |
   | `glass_door` (porte vitrée) | porte vitrée ou coulissante | selon son capteur |
+  | `grille` (grille / porte grillagée) | grille de sécurité ou porte grillagée : une barrière physique qui n'arrête presque pas le son | selon son capteur s'il y en a un |
   | `window` (fenêtre) | une fenêtre | selon son capteur |
   | `shutter` (volet) | volet roulant ou store | selon son volet (cover) |
   | `wall` (mur) | un mur plein : adjacent, sans passage | toujours fermé |
 
   Une porte et une porte vitrée entre les deux mêmes espaces sont deux séparations d'une seule liaison.
 - **Capteurs.** Une séparation qui peut changer peut avoir un `binary_sensor` (contact de porte ou de fenêtre) ou un `cover` (volet). Son état devient `open`, `closed`, `partial` (un volet entre 1 et 99 %, ou en mouvement) ou `unknown` (pas de capteur, ou il ne répond pas).
+- **Un volet devant une fenêtre ou une porte.** Une porte, une porte vitrée ou une fenêtre peut aussi indiquer le `cover` du volet roulant ou du store placé devant elle (champ `shutter`). La séparation garde son propre état et signale le volet à côté, dans les attributs `shutter`, `shutter_state` et `shutter_position` : un consommateur peut combiner les deux. Le type `shutter` seul ne sert que pour un volet qui est toute la séparation.
 
 ## Configuration
 
@@ -39,7 +41,7 @@ Ouvrez **Home Structure** dans la barre latérale. Vous voyez un plan que vous o
 
 1. **Ajouter vos pièces.** La colonne de gauche liste les pièces Home Assistant qui ne sont pas encore sur le plan. Cliquez sur **Tout ajouter** (elles sont rangées en une colonne par étage, que vous déplacez ensuite), ou glissez ou cliquez seulement celles que vous voulez. Les pièces laissées dans la colonne sont ignorées. Rien n'est deviné d'après les noms.
 2. **Les déplacer** où vous voulez, pour que le plan ressemble à votre logement. **Réorganiser** remet tout en ordre par étage.
-3. **Les relier.** Glissez la poignée ● d'une pièce sur la pièce voisine. Cliquez sur le lien pour dire ce qui les sépare (espace ouvert, porte, porte vitrée, fenêtre, volet, mur…), choisissez le capteur d'ouverture parmi les portes, fenêtres et volets des deux pièces, et ajoutez une deuxième séparation s'il y en a une. Le lien affiche l'état en direct de chaque séparation (ouvert, fermé, partiel).
+3. **Les relier.** Glissez la poignée ● d'une pièce sur la pièce voisine. Cliquez sur le lien pour dire ce qui les sépare (espace ouvert, porte, porte vitrée, fenêtre, volet, mur…), choisissez le capteur d'ouverture parmi les portes, fenêtres et volets des deux pièces, choisissez le volet placé devant une fenêtre ou une porte s'il y en a un, et ajoutez une deuxième séparation s'il y en a une autre. Le lien affiche l'état en direct de chaque séparation (ouvert, fermé, partiel).
 4. **Ajouter l'extérieur** avec **+ Zone** : jardin, balcon, hall, cage d'escalier, rue, logement voisin… Le type décide si la zone fait partie du logement ; modifiable. Une pièce peut aussi devenir un type de zone (une pièce « Garage » peut être marquée garage), et une pièce peut être scindée en créant une zone à côté.
 
 Sur un écran étroit, le plan devient une liste avec les mêmes possibilités. Les anciens écrans (*Configurer* sur l'intégration) fonctionnent toujours et modifient les mêmes données.

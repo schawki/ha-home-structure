@@ -1,6 +1,6 @@
 # Home Structure
 
-A Home Assistant integration that describes **the structure of your home**: which spaces are next to each other, what separates them (open space, doorway, door, glass door, window, shutter, plain wall) and what the opening sensors say right now.
+A Home Assistant integration that describes **the structure of your home**: which spaces are next to each other, what separates them (open space, doorway, door, glass door, security grille, window, shutter, plain wall) and what the opening sensors say right now.
 
 It does not do anything with sound, light, heat or presence. It only keeps the description of the home, so that any integration or automation can ask "is the living room open to the hall?" instead of each one asking you to describe your home again. [Sound Recognition](https://github.com/schawki/sound-recognition-ha) is the first one to use it.
 
@@ -28,12 +28,14 @@ It does not do anything with sound, light, heat or presence. It only keeps the d
   | `opening` | a passage with no door | always open |
   | `door` | a door | from its sensor |
   | `glass_door` | glass or sliding door | from its sensor |
+  | `grille` | security grille or mesh door: a physical barrier that hardly stops sound | from its sensor if it has one |
   | `window` | a window | from its sensor |
   | `shutter` | roller shutter or blind | from its cover |
   | `wall` | a plain wall: adjacent, no passage | always closed |
 
   A door and a glass door between the same two spaces are two separations of one connection.
 - **Sensors.** A separation that can change may have a `binary_sensor` (door or window contact) or a `cover` (shutter). Its state becomes `open`, `closed`, `partial` (a cover between 1 and 99 %, or moving) or `unknown` (no sensor, or it does not answer).
+- **A shutter in front of a window or a door.** A door, glass door or window can also name the `cover` of the roller shutter or blind in front of it (the `shutter` field). The separation keeps its own state and reports the shutter next to it in the attributes `shutter`, `shutter_state` and `shutter_position`, so a consumer can combine the two. Use the separate `shutter` type only for a shutter that is the whole separation.
 
 ## Setting it up
 
@@ -41,7 +43,7 @@ Open **Home Structure** in the sidebar. You see a plan you arrange yourself, and
 
 1. **Add your rooms.** The left column lists the Home Assistant areas that are not on the plan yet. Click **Add all** (they are laid out in one column per floor, which you can then move around), or drag or click only the ones you want. Areas left in the column are ignored. Nothing is guessed from names.
 2. **Move them** wherever makes sense to you, so the plan looks like your home. **Rearrange** lays everything out again by floor.
-3. **Connect them.** Drag the ● handle of a room onto the room next to it. Click the link to say what separates them (open space, door, glass door, window, shutter, wall…), pick the opening sensor from the door, window and cover entities of the two rooms, and add a second separation if there is one. The link shows the live state of each separation (open, closed, partly open).
+3. **Connect them.** Drag the ● handle of a room onto the room next to it. Click the link to say what separates them (open space, door, glass door, grille, window, shutter, wall…), pick the opening sensor from the door, window and cover entities of the two rooms, pick the shutter in front of a window or door if there is one, and add a second separation if there is another. The link shows the live state of each separation (open, closed, partly open).
 4. **Add what is outside** with **+ Zone**: garden, balcony, hall, stairwell, street, a neighbouring home… The kind decides whether the zone is part of the home; you can change it. A room can also be turned into a zone kind (an area named "Garage" can be marked as a garage), and a room can be split by creating a zone next to it.
 
 On a narrow screen the plan becomes a list with the same editing. The older configuration screens (*Configure* on the integration) still work and edit the same data.

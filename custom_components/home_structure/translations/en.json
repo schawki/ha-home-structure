@@ -177,7 +177,8 @@
       "duplicate_connection": "Two connections link the same spaces.",
       "no_separation": "A connection has no separation.",
       "invalid_separation": "A separation is invalid.",
-      "sensor_not_needed": "An open space, an opening and a wall have no sensor."
+      "sensor_not_needed": "An open space, an opening and a wall have no sensor.",
+      "invalid_shutter": "A shutter can only be set on a door, a glass door or a window, and it must be a cover."
     }
   },
   "selector": {
@@ -202,6 +203,7 @@
         "opening": "opening",
         "door": "door",
         "glass_door": "glass door",
+        "grille": "security grille",
         "window": "window",
         "shutter": "shutter",
         "wall": "wall"
@@ -236,6 +238,14 @@
       },
       "sep_glass_door": {
         "name": "{connection} · glass door",
+        "state": {
+          "open": "Open",
+          "closed": "Closed",
+          "partial": "Partly open"
+        }
+      },
+      "sep_grille": {
+        "name": "{connection} · security grille",
         "state": {
           "open": "Open",
           "closed": "Closed",

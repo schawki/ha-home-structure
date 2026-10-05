@@ -10,7 +10,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 
 from . import model, structure
-from .const import DOMAIN, PERMANENT, SENSOR_DOMAINS, SEPARATION_TYPES, ZONE_IN_HOME, ZONE_KINDS
+from .const import DOMAIN, PERMANENT, SENSOR_DOMAINS, SEPARATION_TYPES, SHUTTER_HOSTS, ZONE_IN_HOME, ZONE_KINDS
 
 
 def _entry(hass: HomeAssistant) -> ConfigEntry | None:
@@ -32,7 +32,7 @@ def ws_get(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg:
         return
     connection.send_result(msg["id"], {
         "areas": structure.areas(hass), "options": _options(entry), "kinds": ZONE_KINDS, "types": SEPARATION_TYPES,
-        "in_home": ZONE_IN_HOME, "permanent": PERMANENT, "sensor_domains": SENSOR_DOMAINS,
+        "in_home": ZONE_IN_HOME, "permanent": PERMANENT, "sensor_domains": SENSOR_DOMAINS, "shutter_hosts": SHUTTER_HOSTS,
     })
 
 

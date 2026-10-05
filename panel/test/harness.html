@@ -24,7 +24,7 @@
     states: { "binary_sensor.porte": { state: "off", attributes: {} }, "cover.volet": { state: "open", attributes: { current_position: 40 } } },
     async callWS(msg) {
       S.calls.push(msg.type);
-      if (msg.type === "home_structure/get") return { areas, options: JSON.parse(JSON.stringify(S.options)), kinds, types: ["open_space", "opening", "door", "glass_door", "window", "shutter", "wall"], in_home: inHome, permanent: { open_space: "open", opening: "open", wall: "closed" }, sensor_domains: ["binary_sensor", "cover"] };
+      if (msg.type === "home_structure/get") return { areas, options: JSON.parse(JSON.stringify(S.options)), kinds, types: ["open_space", "opening", "door", "glass_door", "grille", "window", "shutter", "wall"], in_home: inHome, permanent: { open_space: "open", opening: "open", wall: "closed" }, sensor_domains: ["binary_sensor", "cover"], shutter_hosts: ["door", "glass_door", "window"] };
       if (msg.type === "home_structure/save") {
         if (S.fail === "save") throw { message: "boom" };
         S.options = JSON.parse(JSON.stringify(msg.options)); S.saves.push(S.options);

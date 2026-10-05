@@ -177,7 +177,8 @@
       "duplicate_connection": "Deux liaisons relient les mêmes espaces.",
       "no_separation": "Une liaison n'a aucune séparation.",
       "invalid_separation": "Une séparation est invalide.",
-      "sensor_not_needed": "Un espace ouvert, une ouverture et un mur n'ont pas de capteur."
+      "sensor_not_needed": "Un espace ouvert, une ouverture et un mur n'ont pas de capteur.",
+      "invalid_shutter": "Un volet ne peut être associé qu'à une porte, une porte vitrée ou une fenêtre, et doit être un volet roulant (cover)."
     }
   },
   "selector": {
@@ -202,6 +203,7 @@
         "opening": "ouverture",
         "door": "porte",
         "glass_door": "porte vitrée",
+        "grille": "grille / porte grillagée",
         "window": "fenêtre",
         "shutter": "volet",
         "wall": "mur"
@@ -236,6 +238,14 @@
       },
       "sep_glass_door": {
         "name": "{connection} · porte vitrée",
+        "state": {
+          "open": "Ouvert",
+          "closed": "Fermé",
+          "partial": "Partiellement ouvert"
+        }
+      },
+      "sep_grille": {
+        "name": "{connection} · grille",
         "state": {
           "open": "Ouvert",
           "closed": "Fermé",

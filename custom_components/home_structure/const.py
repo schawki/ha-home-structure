@@ -10,9 +10,11 @@ GLASS_DOOR = "glass_door"      # glass or sliding door
 WINDOW = "window"
 SHUTTER = "shutter"            # roller shutter, blind
 WALL = "wall"                  # plain wall: adjacent, no passage
-SEPARATION_TYPES = [OPEN_SPACE, OPENING, DOOR, GLASS_DOOR, WINDOW, SHUTTER, WALL]
+GRILLE = "grille"              # security grille or mesh door: a physical barrier that hardly stops sound
+SEPARATION_TYPES = [OPEN_SPACE, OPENING, DOOR, GLASS_DOOR, GRILLE, WINDOW, SHUTTER, WALL]
 PERMANENT = {OPEN_SPACE: "open", OPENING: "open", WALL: "closed"}   # types whose state never changes
 SENSOR_DOMAINS = ["binary_sensor", "cover"]
+SHUTTER_HOSTS = [DOOR, GLASS_DOOR, WINDOW]   # separations that can have a roller shutter or blind in front of them (a cover entity)
 
 # Spaces other than rooms. A zone can be inside the home (garden, balcony) or outside it (street, building hall, neighbour).
 ZONE_KINDS = ["garden", "balcony", "terrace", "courtyard", "garage", "hall", "stairwell", "common_area", "street", "neighbor", "other"]

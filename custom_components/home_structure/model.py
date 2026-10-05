@@ -5,7 +5,7 @@ Data (stored in the options of the config entry):
     excluded_areas: [area id]    Home Assistant areas left out of the structure (technical groupings, for example); every other area is a room
     layout:      {space id: {x, y}}              where each space sits on the plan of the editor panel; a space without a position is not on the plan yet
     zones:       [{id, kind, in_home, name?}]   spaces other than rooms; id is "zone:<slug>", or "area:<area id>" to give a kind to a Home Assistant area
-    connections: [{id, a, b, separations: [{id, type, sensor?}]}]   a and b are space ids; two spaces with no connection are not adjacent
+    connections: [{id, a, b, separations: [{id, type, sensor?, shutter?}]}]   a and b are space ids; two spaces with no connection are not adjacent
 
 A room is any Home Assistant area ("area:<area id>"); it needs no entry in `zones`.
 """
@@ -16,7 +16,7 @@ import unicodedata
 from collections.abc import Callable
 from typing import Any
 
-from .const import PERMANENT, SEPARATION_TYPES, ZONE_IN_HOME, ZONE_KINDS
+from .const import PERMANENT, SEPARATION_TYPES, SHUTTER_HOSTS, ZONE_IN_HOME, ZONE_KINDS
 
 StateReader = Callable[[str], "tuple[str, dict] | None"]
 
@@ -84,6 +84,8 @@ def validate(data: dict, area_ids: set[str]) -> list[str]:
                 errors.append("invalid_separation")
             elif s["type"] in PERMANENT and s.get("sensor"):
                 errors.append("sensor_not_needed")
+            if s.get("shutter") and (s.get("type") not in SHUTTER_HOSTS or not str(s["shutter"]).startswith("cover.")):
+                errors.append("invalid_shutter")
     return sorted(set(errors))
 
 
@@ -113,6 +115,12 @@ def separation_state(sep: dict, read: StateReader) -> tuple[str, int | None]:
     return normalize(got[0], got[1]) if got else ("unknown", None)
 
 
+def shutter_state(sep: dict, read: StateReader) -> tuple[str, int | None]:
+    """State of the shutter in front of a separation (a cover): ("unknown", None) when there is none or it cannot be read."""
+    got = read(sep["shutter"]) if sep.get("shutter") else None
+    return normalize(got[0], got[1]) if got else ("unknown", None)
+
+
 def build(data: dict, areas: list[dict], read: StateReader, entity_of: Callable[[str], str | None] = lambda _sid: None) -> dict:
     """The whole structure as the service returns it: spaces, and connections with the current state of each separation.
 
@@ -124,7 +132,10 @@ def build(data: dict, areas: list[dict], read: StateReader, entity_of: Callable[
         seps = []
         for s in c["separations"]:
             state, pos = separation_state(s, read)
-            seps.append({"id": s["id"], "type": s["type"], "state": state, "position": pos, "sensor": s.get("sensor"), "entity_id": entity_of(s["id"])})
+            shutter = s.get("shutter")
+            sh_state, sh_pos = shutter_state(s, read)
+            seps.append({"id": s["id"], "type": s["type"], "state": state, "position": pos, "sensor": s.get("sensor"), "entity_id": entity_of(s["id"]),
+                         "shutter": shutter, "shutter_state": sh_state if shutter else None, "shutter_position": sh_pos})
         conns.append({"id": c["id"], "a": c["a"], "b": c["b"], "a_name": names.get(c["a"], c["a"]), "b_name": names.get(c["b"], c["b"]), "separations": seps})
     return {"spaces": all_spaces, "connections": conns}
 

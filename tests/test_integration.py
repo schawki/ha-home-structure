@@ -184,6 +184,7 @@ async def test_sensors_follow_the_opening_sensors_and_the_service_answers(hass, 
     assert hass.states.get(door).name.endswith("· door")
 
     hass.states.async_set("binary_sensor.porte", "on")
+    # a shutter in front of a separation is reported next to it and followed live
     out = await hass.services.async_call(DOMAIN, "get_structure", {}, blocking=True, return_response=True)
     sp = {x["id"]: x for x in out["spaces"]}
     assert sp[h]["kind"] == "hall" and sp[h]["in_home"] is False and sp[s]["kind"] == "room"
@@ -280,3 +281,24 @@ async def test_zones_bulk_refuses_an_area_in_two_kinds(hass, floor_areas):
     r = await step(hass, flow, next_step_id="zones_bulk")
     r = await step(hass, r, garden=[floor_areas["Garden"]], balcony=[floor_areas["Garden"]])
     assert r["type"] is FlowResultType.FORM and r["errors"]["base"] == "area_in_two_kinds"
+
+
+async def test_the_shutter_of_a_separation_is_an_attribute_and_is_followed(hass, areas):
+    e, h = f"area:{areas['Entrée']}", f"area:{areas['Entrée (extérieur)']}"
+    hass.states.async_set("binary_sensor.baie", "off")
+    hass.states.async_set("cover.volet", "closed", {"current_position": 0})
+    entry = await make_entry(hass, {"zones": [{"id": h, "kind": "hall", "in_home": False}],
+                                    "connections": [{"id": "c", "a": e, "b": h, "separations": [{"id": "s", "type": "glass_door", "sensor": "binary_sensor.baie", "shutter": "cover.volet"},
+                                                                                              {"id": "g", "type": "grille"}]}]})
+    reg = er.async_get(hass)
+    glass = reg.async_get_entity_id("sensor", DOMAIN, f"{entry.entry_id}_s")
+    attrs = hass.states.get(glass).attributes
+    assert hass.states.get(glass).state == "closed" and attrs["shutter"] == "cover.volet" and attrs["shutter_state"] == "closed"
+    hass.states.async_set("cover.volet", "open", {"current_position": 100})
+    await hass.async_block_till_done()
+    assert hass.states.get(glass).attributes["shutter_state"] == "open" and hass.states.get(glass).state == "closed"
+    grille = hass.states.get(reg.async_get_entity_id("sensor", DOMAIN, f"{entry.entry_id}_g"))
+    assert grille.attributes["type"] == "grille" and grille.attributes["shutter"] is None and grille.state == "unknown"
+    out = await hass.services.async_call(DOMAIN, "get_structure", {}, blocking=True, return_response=True)
+    seps = {x["id"]: x for c in out["connections"] for x in c["separations"]}
+    assert seps["s"]["shutter"] == "cover.volet" and seps["s"]["shutter_state"] == "open"

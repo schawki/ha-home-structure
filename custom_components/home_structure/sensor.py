@@ -40,6 +40,7 @@ class SeparationSensor(SensorEntity):
         self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, entry.entry_id)}, name="Home Structure", entry_type=DeviceEntryType.SERVICE)
         self._names = (a_name, b_name)
         self._position: int | None = None
+        self._shutter: tuple[str, int | None] = ("unknown", None)
         self._refresh()
 
     def _read(self, entity_id: str):
@@ -49,19 +50,22 @@ class SeparationSensor(SensorEntity):
     def _refresh(self) -> None:
         state, self._position = model.separation_state(self._sep, self._read)
         self._attr_native_value = state if state in STATES else None
+        self._shutter = model.shutter_state(self._sep, self._read)
 
     @property
     def extra_state_attributes(self) -> dict:
         return {"type": self._sep["type"], "space_a": self._connection["a"], "space_b": self._connection["b"],
-                "name_a": self._names[0], "name_b": self._names[1], "sensor": self._sep.get("sensor"), "position": self._position}
+                "name_a": self._names[0], "name_b": self._names[1], "sensor": self._sep.get("sensor"), "position": self._position,
+                "shutter": self._sep.get("shutter"), "shutter_state": self._shutter[0] if self._sep.get("shutter") else None,
+                "shutter_position": self._shutter[1]}
 
     async def async_added_to_hass(self) -> None:
         self._refresh()
-        sensor = self._sep.get("sensor")
-        if sensor and self._sep["type"] not in PERMANENT:
+        watched = [e for e in (self._sep.get("sensor") if self._sep["type"] not in PERMANENT else None, self._sep.get("shutter")) if e]
+        if watched:
             @callback
             def changed(_event) -> None:
                 self._refresh()
                 self.async_write_ha_state()
 
-            self.async_on_remove(async_track_state_change_event(self.hass, [sensor], changed))
+            self.async_on_remove(async_track_state_change_event(self.hass, watched, changed))

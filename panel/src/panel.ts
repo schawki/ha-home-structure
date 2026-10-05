@@ -2,7 +2,7 @@ import { LitElement, css, html, nothing, svg } from "lit";
 import { property, state } from "lit/decorators.js";
 import { translator } from "./i18n";
 import type { Key, T } from "./i18n";
-import { BOX_H, BOX_W, autoLayout, clone, connOf, newId, nextFree, placedSpaces, sepState, slug, trayAreas } from "./logic";
+import { BOX_H, BOX_W, autoLayout, clone, connOf, newId, nextFree, placedSpaces, sepState, shutterState, slug, trayAreas } from "./logic";
 import type { Area, Bootstrap, Candidates, Conn, Hass, Options, Pos, Sep, SepState, Space } from "./types";
 
 type Selection = { kind: "space" | "link"; id: string } | null;
@@ -202,6 +202,15 @@ class HomeStructurePanel extends LitElement {
       if (!s) return;
       s.type = type;
       if (this.boot!.permanent[type]) delete s.sensor;
+      if (!this.boot!.shutter_hosts.includes(type)) delete s.shutter;
+    });
+  }
+
+  private setSepShutter(cid: string, sid: string, cover: string): void {
+    this.editConn(cid, (c) => {
+      const s = c.separations.find((x) => x.id === sid);
+      if (!s) return;
+      if (cover) s.shutter = cover; else delete s.shutter;
     });
   }
 
@@ -292,7 +301,8 @@ class HomeStructurePanel extends LitElement {
 
   private chip(sep: Sep) {
     const st = this.stateOf(sep);
-    return html`<span class="chip ${st}" title=${this.t(`state_${st}` as Key)}><i></i>${this.t(`type_${sep.type}` as Key)}</span>`;
+    const sh = shutterState(sep, this.hass);
+    return html`<span class="chip ${st}" title=${this.t(`state_${st}` as Key)}><i></i>${this.t(`type_${sep.type}` as Key)}${sh ? html`<i class="sh ${sh}" title="${this.t("shutterShort")}: ${this.t(`state_${sh}` as Key)}"></i>${this.t("shutterShort")}` : nothing}</span>`;
   }
 
   private renderTray() {
@@ -376,11 +386,15 @@ class HomeStructurePanel extends LitElement {
         const permanent = !!this.boot!.permanent[s.type];
         const opts = [{ value: "", label: this.t("noSensor") }, ...sensors.map((x) => ({ value: x.entity_id, label: x.name }))];
         if (s.sensor && !sensors.some((x) => x.entity_id === s.sensor)) opts.push({ value: s.sensor, label: s.sensor });
+        const covers = sensors.filter((x) => x.entity_id.startsWith("cover."));
+        const shutterOpts = [{ value: "", label: this.t("noShutter") }, ...covers.map((x) => ({ value: x.entity_id, label: x.name }))];
+        if (s.shutter && !covers.some((x) => x.entity_id === s.shutter)) shutterOpts.push({ value: s.shutter, label: s.shutter });
         return html`<div class="sep" data-sep=${s.id}>
           ${this.select(s.type, typeOptions, (v) => this.setSepType(c.id, s.id, v), "type")}
           ${permanent ? html`<small class="muted">${this.t("noSensorNeeded")}</small>`
             : html`${this.select(s.sensor ?? "", opts, (v) => this.setSepSensor(c.id, s.id, v), "sensor")}
               <small class="muted">${this.cands ? (this.cands.filtered ? this.t("sensorsHere") : this.t("sensorsAll")) : ""}</small>`}
+          ${this.boot!.shutter_hosts.includes(s.type) ? html`${this.select(s.shutter ?? "", shutterOpts, (v) => this.setSepShutter(c.id, s.id, v), "shutter")}<small class="muted">${this.t("shutterHint")}</small>` : nothing}
           <div class="row">${this.chip(s)}${c.separations.length > 1 ? html`<button class="plain danger" data-action="remove-sep" @click=${() => this.editConn(c.id, (x) => { x.separations = x.separations.filter((y) => y.id !== s.id); })}>${this.t("removeSep")}</button>` : nothing}</div>
         </div>`;
       })}
@@ -497,6 +511,7 @@ class HomeStructurePanel extends LitElement {
     .chip { display: inline-flex; align-items: center; gap: 5px; font-size: .72rem; padding: 2px 8px; border-radius: 999px; background: var(--card-background-color); border: 1px solid var(--divider-color); color: var(--primary-text-color); white-space: nowrap; }
     .chip i { width: 8px; height: 8px; border-radius: 50%; background: var(--disabled-color, #9e9e9e); display: inline-block; }
     .chip.open i { background: var(--success-color, #43a047); } .chip.closed i { background: var(--error-color, #db4437); } .chip.partial i { background: var(--warning-color, #ffa600); }
+    .chip i.sh { border-radius: 2px; margin-left: 2px; width: 7px; height: 7px; } .chip i.sh.open { background: var(--success-color, #43a047); } .chip i.sh.closed { background: var(--error-color, #db4437); } .chip i.sh.partial { background: var(--warning-color, #ffa600); }
     .chip.unknown { border-style: dashed; }
     .empty { position: absolute; left: 24px; top: 24px; color: var(--secondary-text-color); }
     .spaces li { padding: 10px 12px; border: 1px solid var(--divider-color); border-radius: 8px; margin-bottom: 6px; display: flex; justify-content: space-between; background: var(--card-background-color); cursor: pointer; } .spaces li.sel { border-color: var(--primary-color); }
