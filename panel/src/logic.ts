@@ -2,8 +2,8 @@ import type { Area, Bootstrap, Conn, Hass, Options, Pos, Sep, SepState, Space } 
 
 export const BOX_W = 168;
 export const BOX_H = 58;
-const COL_W = 224;
-const ROW_H = 92;
+const COL_W = 290;
+const ROW_H = 120;
 const MARGIN = 24;
 
 /** Same reading as the integration: binary_sensor on = open; cover by position when it has one, else by state. */
