@@ -13,7 +13,9 @@ jobs:
         with:
           python-version: "3.13"
       - name: Install Home Assistant test tooling
-        run: pip install pytest-homeassistant-custom-component
+        run: |
+          pip install pytest-homeassistant-custom-component
+          pip install --no-deps home-assistant-frontend
       - name: Tests
         run: python -m pytest tests -q
 

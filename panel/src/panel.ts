@@ -550,4 +550,4 @@ class HomeStructurePanel extends LitElement {
     .zoneform { position: fixed; top: 64px; right: 16px; z-index: 5; width: 280px; background: var(--card-background-color); border: 1px solid var(--divider-color); border-radius: 10px; padding: 14px; box-shadow: 0 6px 24px rgba(0,0,0,.35); }
   `;
 }
-customElements.define("home-structure-panel", HomeStructurePanel);
+if (!customElements.get("home-structure-panel")) customElements.define("home-structure-panel", HomeStructurePanel);
