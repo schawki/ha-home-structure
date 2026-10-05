@@ -40,10 +40,10 @@ export function placedSpaces(boot: Bootstrap, o: Options): Space[] {
     const pos = o.layout[id];
     if (!pos) continue;
     const z = zones.get(id) ?? null;
-    out.push({ id, name: z?.name || a.name, kind: z?.kind ?? "room", in_home: z ? z.in_home : true, area: a, zone: z, pos });
+    out.push({ id, name: z?.name || a.name, kind: z?.kind ?? "room", room_type: z ? null : o.room_types[id] ?? null, in_home: z ? z.in_home : true, area: a, zone: z, pos });
   }
   for (const z of o.zones) {
-    if (z.id.startsWith("zone:")) out.push({ id: z.id, name: z.name ?? z.id, kind: z.kind, in_home: z.in_home, area: null, zone: z, pos: o.layout[z.id] ?? { x: MARGIN, y: MARGIN } });
+    if (z.id.startsWith("zone:")) out.push({ id: z.id, name: z.name ?? z.id, kind: z.kind, room_type: null, in_home: z.in_home, area: null, zone: z, pos: o.layout[z.id] ?? { x: MARGIN, y: MARGIN } });
   }
   return out;
 }

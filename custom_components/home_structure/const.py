@@ -21,4 +21,8 @@ ZONE_KINDS = ["garden", "balcony", "terrace", "courtyard", "garage", "hall", "st
 ZONE_IN_HOME = {"garden": True, "balcony": True, "terrace": True, "courtyard": True, "garage": True,
                 "hall": False, "stairwell": False, "common_area": False, "street": False, "neighbor": False, "other": False}
 
+# What an ordinary room is used for (optional, chosen by the user, never guessed from a name). Zones have their own kinds above.
+ROOM_TYPES = ["bedroom", "bathroom", "toilet", "kitchen", "living_room", "dining_room", "office", "hallway", "entrance", "dressing",
+              "laundry", "storage", "utility_room"]
+
 STATES = ["open", "closed", "partial"]   # a separation whose state cannot be read is "unknown"

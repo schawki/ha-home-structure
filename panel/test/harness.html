@@ -14,7 +14,7 @@
     { id: "salon", name: "Salon", floor: "RDC" }, { id: "cuisine", name: "Cuisine", floor: "RDC" }, { id: "entree", name: "Entrée", floor: "RDC" },
     { id: "chambre", name: "Chambre", floor: "Étage" }, { id: "bureau", name: "Bureau", floor: "Étage" }, { id: "cave", name: "Cave", floor: null },
   ];
-  let options = { zones: [], connections: [], excluded_areas: [], layout: {} };
+  let options = { zones: [], connections: [], excluded_areas: [], layout: {}, room_types: {} };
   if (q.get("legacy")) options = { zones: [], connections: [{ id: "c1", a: "area:salon", b: "area:cuisine", separations: [{ id: "s1", type: "door", sensor: "binary_sensor.porte" }] }], excluded_areas: [], layout: {} };
   S.options = options;
   const kinds = ["garden", "balcony", "terrace", "courtyard", "garage", "hall", "stairwell", "common_area", "street", "neighbor", "other"];
@@ -24,7 +24,7 @@
     states: { "binary_sensor.porte": { state: "off", attributes: {} }, "cover.volet": { state: "open", attributes: { current_position: 40 } } },
     async callWS(msg) {
       S.calls.push(msg.type);
-      if (msg.type === "home_structure/get") return { areas, options: JSON.parse(JSON.stringify(S.options)), kinds, types: ["open_space", "opening", "door", "glass_door", "grille", "window", "shutter", "wall"], in_home: inHome, permanent: { open_space: "open", opening: "open", wall: "closed" }, sensor_domains: ["binary_sensor", "cover"], shutter_hosts: ["door", "glass_door", "window"] };
+      if (msg.type === "home_structure/get") return { areas, options: JSON.parse(JSON.stringify(S.options)), kinds, types: ["open_space", "opening", "door", "glass_door", "grille", "window", "shutter", "wall"], in_home: inHome, permanent: { open_space: "open", opening: "open", wall: "closed" }, sensor_domains: ["binary_sensor", "cover"], shutter_hosts: ["door", "glass_door", "window"], room_types: ["bedroom", "bathroom", "toilet", "kitchen", "living_room", "dining_room", "office", "hallway", "entrance", "dressing", "laundry", "storage", "utility_room"] };
       if (msg.type === "home_structure/save") {
         if (S.fail === "save") throw { message: "boom" };
         S.options = JSON.parse(JSON.stringify(msg.options)); S.saves.push(S.options);

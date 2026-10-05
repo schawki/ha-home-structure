@@ -42,7 +42,7 @@ class HomeStructurePanel extends LitElement {
     try {
       const boot = await this.hass.callWS<Bootstrap>({ type: "home_structure/get" });
       this.boot = boot;
-      this.opts = boot.options;
+      this.opts = { ...boot.options, room_types: boot.options.room_types ?? {} };
       this.placeLegacy();
     } catch {
       this.failed = true;
@@ -129,6 +129,7 @@ class HomeStructurePanel extends LitElement {
   private removeFromPlan(id: string): void {
     const o = clone(this.opts);
     delete o.layout[id];
+    delete o.room_types[id];
     o.zones = o.zones.filter((z) => z.id !== id);
     o.connections = o.connections.filter((c) => c.a !== id && c.b !== id);
     this.commit(o, null);
@@ -150,6 +151,7 @@ class HomeStructurePanel extends LitElement {
   private setKind(s: Space, kind: string): void {
     const o = clone(this.opts);
     const isArea = s.id.startsWith("area:");
+    delete o.room_types[s.id];
     if (isArea && kind === "room") {
       o.zones = o.zones.filter((z) => z.id !== s.id);
     } else {
@@ -159,6 +161,18 @@ class HomeStructurePanel extends LitElement {
       else o.zones.push({ id: s.id, kind, in_home: inHome });
     }
     this.commit(o);
+  }
+
+  /** One list for everything: a type of room keeps the space a room, a kind of zone makes it a zone. */
+  private setType(s: Space, value: string): void {
+    if (this.boot!.room_types.includes(value) || value === "") {
+      const o = clone(this.opts);
+      o.zones = o.zones.filter((z) => z.id !== s.id);
+      if (value) o.room_types[s.id] = value; else delete o.room_types[s.id];
+      this.commit(o);
+    } else {
+      this.setKind(s, value);
+    }
   }
 
   private setInHome(s: Space, value: boolean): void {
@@ -291,6 +305,10 @@ class HomeStructurePanel extends LitElement {
     return this.t(`kind_${kind}` as Key);
   }
 
+  private typeLabel(s: Space): string {
+    return s.kind !== "room" ? this.kindLabel(s.kind) : s.room_type ? this.t(`rt_${s.room_type}` as Key) : "";
+  }
+
   private stateOf(sep: Sep): SepState {
     return sepState(sep, this.boot!, this.hass);
   }
@@ -342,7 +360,7 @@ class HomeStructurePanel extends LitElement {
       })}
       ${spaces.map((s) => html`<div class="box ${s.in_home ? "" : "outside"} ${this.selection?.kind === "space" && this.selection.id === s.id ? "sel" : ""} ${s.kind === "room" ? "" : "zone"}"
         data-space=${s.id} style="left:${s.pos.x}px;top:${s.pos.y}px;width:${BOX_W}px;height:${BOX_H}px" @pointerdown=${(e: PointerEvent) => this.boxDown(e, s)}>
-        <strong>${s.name}</strong>${s.kind === "room" ? nothing : html`<small>${this.kindLabel(s.kind)}${s.in_home ? "" : " ↗"}</small>`}
+        <strong>${s.name}</strong>${this.typeLabel(s) ? html`<small>${this.typeLabel(s)}${s.in_home ? "" : " ↗"}</small>` : nothing}
         <span class="handle" title=${this.t("hint")} @pointerdown=${(e: PointerEvent) => this.handleDown(e, s)}>●</span></div>`)}
       ${spaces.length ? nothing : html`<p class="empty">${this.t("planEmpty")}</p>`}
     </div></div>`;
@@ -353,7 +371,7 @@ class HomeStructurePanel extends LitElement {
     return html`<ul class="spaces">${spaces.map((s) => {
       const n = this.opts.connections.filter((c) => c.a === s.id || c.b === s.id).length;
       return html`<li data-space=${s.id} class=${this.selection?.kind === "space" && this.selection.id === s.id ? "sel" : ""} @click=${() => (this.selection = { kind: "space", id: s.id })}>
-        <strong>${s.name}</strong><small>${s.kind === "room" ? "" : this.kindLabel(s.kind)} · ${n}</small></li>`;
+        <strong>${s.name}</strong><small>${this.typeLabel(s)} · ${n}</small></li>`;
     })}${spaces.length ? nothing : html`<li class="muted">${this.t("planEmpty")}</li>`}</ul>`;
   }
 
@@ -409,13 +427,17 @@ class HomeStructurePanel extends LitElement {
     const linked = new Set(mine.flatMap((c) => [c.a, c.b]));
     const others = this.spaces().filter((x) => !linked.has(x.id));
     const isArea = s.id.startsWith("area:");
-    const kinds = [{ value: "room", label: this.kindLabel("room") }, ...this.boot!.kinds.map((k) => ({ value: k, label: this.kindLabel(k) }))]
-      .filter((k) => isArea || k.value !== "room");
+    const inside = isArea ? [...this.boot!.room_types.map((v) => ({ value: v, label: this.t(`rt_${v}` as Key) })), { value: "garage", label: this.kindLabel("garage") }] : [];
+    const outside = this.boot!.kinds.filter((k) => !isArea || k !== "garage").map((k) => ({ value: k, label: this.kindLabel(k) }));
+    const current = s.kind === "room" ? s.room_type ?? "" : s.kind;
     return html`<aside class="drawer" data-drawer="space">
       <header><h2>${s.name}</h2><button class="x" @click=${() => (this.selection = null)} aria-label=${this.t("close")}>×</button></header>
       ${isArea ? html`<p class="muted">${s.area ? this.floorLabel(s.area) : ""}</p>`
         : html`<label>${this.t("zoneName")}<input class="name" .value=${s.name} @change=${(e: Event) => this.renameZone(s, (e.target as HTMLInputElement).value)}></label>`}
-      <label>${this.t("zoneKind")}${this.select(s.kind, kinds, (v) => this.setKind(s, v), "kind")}</label>
+      <label>${this.t("zoneKind")}<select class="kind" .value=${current} @change=${(e: Event) => this.setType(s, (e.target as HTMLSelectElement).value)}>
+        ${isArea ? html`<option value="" ?selected=${current === ""}>${this.t("typeNotSet")}</option>` : nothing}
+        ${inside.length ? html`<optgroup label=${this.t("groupInside")}>${inside.map((o) => html`<option value=${o.value} ?selected=${o.value === current}>${o.label}</option>`)}</optgroup>` : nothing}
+        <optgroup label=${this.t("groupOutside")}>${outside.map((o) => html`<option value=${o.value} ?selected=${o.value === current}>${o.label}</option>`)}</optgroup></select></label>
       ${s.kind === "room" ? nothing : html`<label class="check"><input type="checkbox" class="inhome" .checked=${s.in_home} @change=${(e: Event) => this.setInHome(s, (e.target as HTMLInputElement).checked)}>${this.t("partOfHome")}</label>`}
       <h3>${this.t("connections")}</h3>
       ${mine.length ? html`<ul class="neigh">${mine.map((c) => html`<li data-neighbour=${c.id} @click=${() => (this.selection = { kind: "link", id: c.id })}>

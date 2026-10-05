@@ -10,7 +10,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 
 from . import model, structure
-from .const import DOMAIN, PERMANENT, SENSOR_DOMAINS, SEPARATION_TYPES, SHUTTER_HOSTS, ZONE_IN_HOME, ZONE_KINDS
+from .const import DOMAIN, PERMANENT, SENSOR_DOMAINS, ROOM_TYPES, SEPARATION_TYPES, SHUTTER_HOSTS, ZONE_IN_HOME, ZONE_KINDS
 
 
 def _entry(hass: HomeAssistant) -> ConfigEntry | None:
@@ -19,7 +19,7 @@ def _entry(hass: HomeAssistant) -> ConfigEntry | None:
 
 
 def _options(entry: ConfigEntry) -> dict:
-    return copy.deepcopy({"zones": [], "connections": [], "excluded_areas": [], "layout": {}, **entry.options})
+    return copy.deepcopy({"zones": [], "connections": [], "excluded_areas": [], "layout": {}, "room_types": {}, **entry.options})
 
 
 @websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/get"})
@@ -32,7 +32,7 @@ def ws_get(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg:
         return
     connection.send_result(msg["id"], {
         "areas": structure.areas(hass), "options": _options(entry), "kinds": ZONE_KINDS, "types": SEPARATION_TYPES,
-        "in_home": ZONE_IN_HOME, "permanent": PERMANENT, "sensor_domains": SENSOR_DOMAINS, "shutter_hosts": SHUTTER_HOSTS,
+        "in_home": ZONE_IN_HOME, "permanent": PERMANENT, "sensor_domains": SENSOR_DOMAINS, "shutter_hosts": SHUTTER_HOSTS, "room_types": ROOM_TYPES,
     })
 
 
@@ -45,7 +45,7 @@ async def ws_save(hass: HomeAssistant, connection: websocket_api.ActiveConnectio
     if entry is None:
         connection.send_error(msg["id"], "not_loaded", "Home Structure is not set up")
         return
-    data = {"zones": [], "connections": [], "excluded_areas": [], "layout": {}, **copy.deepcopy(msg["options"])}
+    data = {"zones": [], "connections": [], "excluded_areas": [], "layout": {}, "room_types": {}, **copy.deepcopy(msg["options"])}
     area_ids = {a["id"] for a in structure.areas(hass)}
     model.apply_layout(data, area_ids)
     errors = model.validate(data, area_ids)

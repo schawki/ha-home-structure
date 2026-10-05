@@ -4,6 +4,7 @@ Data (stored in the options of the config entry):
 
     excluded_areas: [area id]    Home Assistant areas left out of the structure (technical groupings, for example); every other area is a room
     layout:      {space id: {x, y}}              where each space sits on the plan of the editor panel; a space without a position is not on the plan yet
+    room_types:  {space id: type}               what an ordinary room is used for (bedroom, bathroom…), optional; only rooms have one
     zones:       [{id, kind, in_home, name?}]   spaces other than rooms; id is "zone:<slug>", or "area:<area id>" to give a kind to a Home Assistant area
     connections: [{id, a, b, separations: [{id, type, sensor?, shutter?}]}]   a and b are space ids; two spaces with no connection are not adjacent
 
@@ -16,7 +17,7 @@ import unicodedata
 from collections.abc import Callable
 from typing import Any
 
-from .const import PERMANENT, SEPARATION_TYPES, SHUTTER_HOSTS, ZONE_IN_HOME, ZONE_KINDS
+from .const import PERMANENT, ROOM_TYPES, SEPARATION_TYPES, SHUTTER_HOSTS, ZONE_IN_HOME, ZONE_KINDS
 
 StateReader = Callable[[str], "tuple[str, dict] | None"]
 
@@ -41,6 +42,7 @@ def spaces(data: dict, areas: list[dict]) -> list[dict]:
     `areas` is [{"id", "name"}]. Each space is {id, name, kind, in_home, area_id}."""
     zones = {z["id"]: z for z in data.get("zones", [])}
     left_out = set(data.get("excluded_areas", []))
+    types = data.get("room_types") or {}
     out = []
     for a in areas:
         if a["id"] in left_out:
@@ -48,10 +50,10 @@ def spaces(data: dict, areas: list[dict]) -> list[dict]:
         sid = f"area:{a['id']}"
         z = zones.get(sid)
         out.append({"id": sid, "name": (z or {}).get("name") or a["name"], "kind": z["kind"] if z else "room",
-                    "in_home": z["in_home"] if z else True, "area_id": a["id"]})
+                    "in_home": z["in_home"] if z else True, "area_id": a["id"], "room_type": None if z else types.get(sid)})
     for z in data.get("zones", []):
         if not z["id"].startswith("area:"):
-            out.append({"id": z["id"], "name": z["name"], "kind": z["kind"], "in_home": z["in_home"], "area_id": None})
+            out.append({"id": z["id"], "name": z["name"], "kind": z["kind"], "in_home": z["in_home"], "area_id": None, "room_type": None})
     return out
 
 
@@ -59,6 +61,10 @@ def validate(data: dict, area_ids: set[str]) -> list[str]:
     """Error codes (also translation keys of the options flow); empty when the structure is consistent."""
     errors: list[str] = []
     known = {f"area:{a}" for a in area_ids if a not in set(data.get("excluded_areas", []))} | {z["id"] for z in data.get("zones", []) if z["id"].startswith("zone:")}
+    zone_ids = {z["id"] for z in data.get("zones", [])}
+    for sid, kind in (data.get("room_types") or {}).items():
+        if kind not in ROOM_TYPES or sid not in known or sid in zone_ids:
+            errors.append("invalid_room_type")
     names = [z["name"].casefold() for z in data.get("zones", []) if z.get("name")]
     if len(names) != len(set(names)):
         errors.append("duplicate_zone_name")
@@ -155,6 +161,7 @@ def exclude_areas(data: dict, area_ids: set[str]) -> None:
     gone = {f"area:{a}" for a in area_ids}
     data["zones"] = [z for z in data.get("zones", []) if z["id"] not in gone]
     data["connections"] = [c for c in data.get("connections", []) if c["a"] not in gone and c["b"] not in gone]
+    data["room_types"] = {k: v for k, v in (data.get("room_types") or {}).items() if k not in gone}
 
 
 def set_area_kinds(data: dict, kinds: dict[str, list[str]], keep: set[str]) -> None:
@@ -199,8 +206,10 @@ def apply_layout(data: dict, area_ids: set[str]) -> None:
     exclude_areas(data, {a for a in area_ids if f"area:{a}" not in data["layout"]})
     known = {f"area:{a}" for a in area_ids if a not in set(data["excluded_areas"])} | {z["id"] for z in data["zones"] if z["id"].startswith("zone:")}
     data["layout"] = {k: v for k, v in data["layout"].items() if k in known}
+    zone_ids = {z["id"] for z in data["zones"]}
+    data["room_types"] = {k: v for k, v in (data.get("room_types") or {}).items() if k in known and k not in zone_ids and v in ROOM_TYPES}   # only rooms have one
 
 
 def structural(data: dict) -> dict:
-    """The part of the data that the sensors and other integrations depend on (everything but the positions on the plan)."""
+    """The part of the data that the sensors and other integrations depend on (everything but the positions on the plan and the types of room)."""
     return {k: data.get(k) for k in ("zones", "connections", "excluded_areas")}

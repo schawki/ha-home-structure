@@ -20,7 +20,7 @@ def test_spaces_rooms_areas_with_a_kind_and_virtual_zones():
     assert by["area:salon"]["kind"] == "room" and by["area:salon"]["in_home"] is True
     assert by["area:jardin"]["kind"] == "garden" and by["area:jardin"]["in_home"] is True and by["area:jardin"]["name"] == "Jardin"
     assert by["area:hall"]["kind"] == "hall" and by["area:hall"]["in_home"] is False and by["area:hall"]["name"] == "Entrée (extérieur)"
-    assert by["zone:rue"] == {"id": "zone:rue", "name": "Rue", "kind": "street", "in_home": False, "area_id": None}
+    assert by["zone:rue"] == {"id": "zone:rue", "name": "Rue", "kind": "street", "in_home": False, "area_id": None, "room_type": None}
     assert len(by) == 5
 
 
@@ -117,3 +117,22 @@ def test_a_shutter_sits_in_front_of_a_door_a_glass_door_or_a_window():
 def test_a_shutter_must_be_a_cover_on_a_door_or_window(sep):
     data = {"zones": [], "connections": [{"id": "c", "a": "area:salon", "b": "area:jardin", "separations": [{"id": "s", **sep}]}]}
     assert model.validate(data, {"salon", "jardin"}) == ["invalid_shutter"]
+
+
+def test_a_room_can_have_a_type_a_zone_cannot():
+    data = {**DATA, "room_types": {"area:salon": "living_room", "area:entree": "entrance"}}
+    by = {s["id"]: s for s in model.spaces(data, AREAS)}
+    assert by["area:salon"]["room_type"] == "living_room" and by["area:entree"]["room_type"] == "entrance"
+    assert by["area:jardin"]["room_type"] is None and by["zone:rue"]["room_type"] is None          # zones have a kind, not a room type
+    assert model.validate(data, {"salon", "entree", "jardin", "hall"}) == []
+    for bad in ({"area:salon": "spaceship"}, {"area:jardin": "bedroom"}, {"zone:rue": "bedroom"}, {"area:nowhere": "bedroom"}):
+        assert model.validate({**DATA, "room_types": bad}, {"salon", "entree", "jardin", "hall"}) == ["invalid_room_type"]
+
+
+def test_room_types_follow_the_rooms_that_leave_the_structure():
+    data = {"zones": [{"id": "area:jardin", "kind": "garden", "in_home": True}], "connections": [], "excluded_areas": [],
+            "room_types": {"area:salon": "living_room", "area:cuisine": "kitchen", "area:jardin": "bedroom", "area:x": "bedroom", "area:salon2": "nope"},
+            "layout": {"area:salon": {"x": 0, "y": 0}, "area:jardin": {"x": 9, "y": 9}}}
+    model.apply_layout(data, {"salon", "cuisine", "jardin"})                      # cuisine has no position: left out; jardin is a zone; x is unknown
+    assert data["room_types"] == {"area:salon": "living_room"}
+    assert "room_types" not in model.structural(data)                              # a type alone never rebuilds the sensors

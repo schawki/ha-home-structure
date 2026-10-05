@@ -178,7 +178,8 @@
       "no_separation": "Une liaison n'a aucune séparation.",
       "invalid_separation": "Une séparation est invalide.",
       "sensor_not_needed": "Un espace ouvert, une ouverture et un mur n'ont pas de capteur.",
-      "invalid_shutter": "Un volet ne peut être associé qu'à une porte, une porte vitrée ou une fenêtre, et doit être un volet roulant (cover)."
+      "invalid_shutter": "Un volet ne peut être associé qu'à une porte, une porte vitrée ou une fenêtre, et doit être un volet roulant (cover).",
+      "invalid_room_type": "Un type de pièce est invalide, ou donné à autre chose qu'une pièce ordinaire."
     }
   },
   "selector": {

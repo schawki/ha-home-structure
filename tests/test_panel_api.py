@@ -33,8 +33,8 @@ async def test_get_lists_areas_with_floors_and_the_vocabulary(hass, hass_ws_clie
     r = (await call(await hass_ws_client(hass), "get"))["result"]
     by = {a["name"]: a for a in r["areas"]}
     assert by["Living"]["floor"] == "Ground" and by["Servers"]["floor"] is None
-    assert r["options"] == {"zones": [], "connections": [], "excluded_areas": [], "layout": {}}
-    assert "glass_door" in r["types"] and "hall" in r["kinds"] and r["in_home"]["garden"] is True and r["permanent"]["wall"] == "closed"
+    assert r["options"] == {"zones": [], "connections": [], "excluded_areas": [], "layout": {}, "room_types": {}}
+    assert "dressing" in r["room_types"] and "glass_door" in r["types"] and "hall" in r["kinds"] and r["in_home"]["garden"] is True and r["permanent"]["wall"] == "closed"
 
 
 async def test_save_keeps_placed_areas_and_leaves_the_others_in_the_tray(hass, hass_ws_client, home):
@@ -108,3 +108,17 @@ async def test_save_accepts_a_shutter_on_a_window_and_refuses_it_elsewhere(hass,
     assert ok["success"] and ok["result"]["options"]["connections"][0]["separations"][0]["shutter"] == "cover.v"
     bad = await call(client, "save", options=options({"type": "wall", "shutter": "cover.v"}))
     assert not bad["success"] and "invalid_shutter" in bad["error"]["message"]
+
+
+async def test_saving_room_types_does_not_rebuild_the_sensors(hass, hass_ws_client, home):
+    entry = await setup(hass)
+    client = await hass_ws_client(hass)
+    living, kitchen = f"area:{home['Living']}", f"area:{home['Kitchen']}"
+    base = {"zones": [], "connections": [{"id": "c", "a": living, "b": kitchen, "separations": [{"id": "s", "type": "opening"}]}],
+            "layout": {living: {"x": 0, "y": 0}, kitchen: {"x": 300, "y": 0}}}
+    assert (await call(client, "save", options=base))["result"]["rebuilt"] is True
+    r = await call(client, "save", options={**base, "room_types": {living: "living_room", kitchen: "kitchen"}})
+    assert r["success"] and r["result"]["rebuilt"] is False
+    assert hass.config_entries.async_get_entry(entry.entry_id).options["room_types"] == {living: "living_room", kitchen: "kitchen"}
+    out = await hass.services.async_call(DOMAIN, "get_structure", {}, blocking=True, return_response=True)
+    assert {s["name"]: s["room_type"] for s in out["spaces"]}["Living"] == "living_room"

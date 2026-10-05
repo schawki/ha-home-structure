@@ -178,7 +178,8 @@
       "no_separation": "A connection has no separation.",
       "invalid_separation": "A separation is invalid.",
       "sensor_not_needed": "An open space, an opening and a wall have no sensor.",
-      "invalid_shutter": "A shutter can only be set on a door, a glass door or a window, and it must be a cover."
+      "invalid_shutter": "A shutter can only be set on a door, a glass door or a window, and it must be a cover.",
+      "invalid_room_type": "A room type is invalid, or given to something that is not an ordinary room."
     }
   },
   "selector": {
