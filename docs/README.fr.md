@@ -4,7 +4,13 @@ Une intégration Home Assistant qui décrit **la structure de votre logement** :
 
 Elle ne fait rien du son, de la lumière, de la chaleur ni de la présence. Elle garde seulement la description du logement, pour que n'importe quelle intégration ou automatisation puisse demander « le salon est-il ouvert sur l'entrée ? » au lieu que chacune vous demande de décrire votre logement. [Sound Recognition](https://github.com/schawki/sound-recognition-ha) est la première à s'en servir.
 
+![Le plan : pièces, liens et ce qui les sépare](images/plan.png)
+
+*English: [README](../README.md)*
+
 ## Installation
+
+Nécessite Home Assistant 2025.8 ou plus récent et vos pièces définies comme pièces (areas).
 
 1. HACS → Dépôts personnalisés → `https://github.com/schawki/ha-home-structure` (catégorie : Intégration) → installer, redémarrer Home Assistant.
 2. Paramètres → Appareils et services → Ajouter une intégration → **Home Structure**.
@@ -51,11 +57,40 @@ Sur un écran étroit, le plan devient une liste avec les mêmes possibilités. 
 ## Ce que vous obtenez
 
 - **Un capteur par séparation**, avec l'état ouvert, fermé ou partiel (inconnu quand il ne peut pas être lu) et les attributs `type`, `space_a`, `space_b`, `name_a`, `name_b`, `sensor` et `position`. Utilisable dans les automatisations, les modèles et les tableaux de bord.
-- **Un service** `home_structure.get_structure`, qui renvoie toute la structure avec les états actuels, pour les intégrations (voir l'exemple dans le [README anglais](../README.md)).
+- **Un service** `home_structure.get_structure`, qui renvoie toute la structure avec les états actuels, pour les intégrations (exemple complet de la réponse dans le [README anglais](../README.md)).
+
+## Dans une automatisation
+
+Chaque séparation est un capteur : l'état d'une porte entre deux pièces est disponible comme n'importe quelle entité :
+
+```yaml
+triggers:
+  - trigger: state
+    entity_id: sensor.home_structure_living_room_building_hall_door
+    to: open
+actions:
+  - action: notify.mobile_app_phone
+    data: {message: "La porte du hall est ouverte."}
+```
+
+## Utilisée par Sound Recognition
+
+[Sound Recognition](https://github.com/schawki/sound-recognition-ha) lit la structure pour savoir combien un son passe d'une pièce à l'autre (une porte ouverte le laisse passer, une porte ou un volet fermé l'étouffe, un mur l'arrête presque) et pour inclure les appareils des pièces reliées. C'est facultatif pour Sound Recognition, et Home Structure n'en a pas besoin.
+
+## Dépannage
+
+- *Une pièce n'apparaît pas dans la liste de gauche* : ce n'est pas encore une pièce Home Assistant, ou elle est déjà sur le plan.
+- *Une séparation affiche `unknown`* : elle n'a pas de capteur, ou son capteur est indisponible. Les portes et fenêtres sans capteur restent `unknown` ; seuls les espaces ouverts, ouvertures et murs ont un état fixe.
+- *Le capteur d'une séparation n'est pas dans la liste* : seules les entités porte, fenêtre et volet des deux pièces sont proposées ; affectez d'abord l'entité à la bonne pièce.
+- *Tout semble faux après un changement* : utilisez **Annuler** dans le panneau ; chaque changement est enregistré tout de suite et annulable.
 
 ## Langues
 
 L'anglais est la référence, le français est inclus. Pour ajouter une langue, voir [CONTRIBUTING.md](../CONTRIBUTING.md) : un seul fichier à copier et traduire.
+
+## État du projet
+
+Version 0.6, testée (les tests du backend et du panneau tournent à chaque commit) et utilisée avec Sound Recognition. Le logement se décrit dans le panneau **Home Structure** de la barre latérale (un plan que vous organisez, avec enregistrement automatique et annulation) ; les menus *Configurer* de l'intégration restent en secours. Retours et tickets bienvenus.
 
 ## Licence
 

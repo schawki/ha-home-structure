@@ -6,7 +6,11 @@ It does not do anything with sound, light, heat or presence. It only keeps the d
 
 *Français : [docs/README.fr.md](docs/README.fr.md)*
 
+![The plan: rooms, links and what separates them](docs/images/plan.png)
+
 ## Install
+
+Requires Home Assistant 2025.8 or later and your rooms defined as areas.
 
 1. HACS → Custom repositories → `https://github.com/schawki/ha-home-structure` (category: Integration) → install, restart Home Assistant.
 2. Settings → Devices & services → Add integration → **Home Structure**.
@@ -80,13 +84,38 @@ layout:   # positions on the editor plan, to draw it
 
 For an integration, reading the structure goes through this service and the `entity_id` of each separation: nothing to import, nothing to install beyond Home Structure.
 
+## Using it in an automation
+
+Each separation is a sensor, so the state of a door between two rooms is available like any other entity:
+
+```yaml
+triggers:
+  - trigger: state
+    entity_id: sensor.home_structure_living_room_building_hall_door
+    to: open
+actions:
+  - action: notify.mobile_app_phone
+    data: {message: "The door to the building hall is open."}
+```
+
+## Used by Sound Recognition
+
+[Sound Recognition](https://github.com/schawki/sound-recognition-ha) reads the structure to know how much a sound passes from one room to the next (an open door lets it through, a closed door or shutter muffles it, a wall nearly stops it) and to include the devices of connected rooms. It is optional for Sound Recognition, and Home Structure does not need it.
+
+## Troubleshooting
+
+- *A room does not appear in the list on the left*: it is not a Home Assistant area yet, or it is already on the plan.
+- *A separation shows `unknown`*: it has no sensor, or its sensor is unavailable. Doors and windows without a sensor stay `unknown`; only open spaces, openings and walls have a fixed state.
+- *The sensor of a separation is not in the list*: only door, window and cover entities of the two rooms are offered; assign the entity to the right area first.
+- *Everything looks wrong after a change*: use **Undo** in the panel; every change is saved immediately and can be undone.
+
 ## Languages
 
 English is the reference. French is included. To add a language, see [CONTRIBUTING.md](CONTRIBUTING.md): it is one file to copy and translate.
 
 ## Status
 
-The home is described in the **Home Structure** panel of the sidebar (a plan you arrange, with autosave and undo). The *Configure* menus of the integration remain as a fallback.
+Version 0.6, tested (backend and panel test suites run on every commit) and used with Sound Recognition. The home is described in the **Home Structure** panel of the sidebar (a plan you arrange, with autosave and undo); the *Configure* menus of the integration remain as a fallback. Feedback and issues are welcome.
 
 ## Licence
 
