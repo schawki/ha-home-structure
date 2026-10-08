@@ -2,7 +2,8 @@ import { LitElement, css, html, nothing } from "lit";
 import { property, state } from "lit/decorators.js";
 import { translator } from "./i18n";
 import type { Key, T } from "./i18n";
-import { addRoom, clone, groupsOf, moveGroup, moveRoom, moveRoomInGroup, newGroupId, removeFromAll, removeRoom, ungrouped } from "./logic";
+import { repeat } from "lit/directives/repeat.js";
+import { addRoom, clone, groupsOf, inside, moveGroup, moveRoom, moveRoomInGroup, nearestIndex, newGroupId, removeFromAll, removeRoom, reorder, setGroupOrder, setRoomOrder, ungrouped } from "./logic";
 import type { Area, Group, GroupKind, GroupSensor, Hass, SensorCfg, SensorMode } from "./types";
 
 const KINDS: GroupKind[] = ["temperature", "humidity"];
@@ -10,6 +11,7 @@ const MODES: SensorMode[] = ["none", "single", "all", "selection"];
 
 type Menu = { kind: "page" } | { kind: "group"; gid: string } | { kind: "room"; gid: string | null; aid: string } | null;
 type Mover = { mode: "move" | "add"; gid: string | null; aid: string; target: string } | null;
+interface Drag { kind: "room" | "group"; gid: string; id: string; order: string[] }
 interface Draft { original: string | null; id: string; name: string; level: string; icon: string; areas: string[]; aliases: string[]; alias: string; temperature: SensorCfg; humidity: SensorCfg }
 
 /** The "Groups" page of the panel: groups of rooms laid out like the floors of Home Assistant's Areas page. */
@@ -28,6 +30,7 @@ class HomeStructureGroups extends LitElement {
   @state() private confirm: string | null = null;
   @state() private reorderGroups = false;
   @state() private reorderRooms: string | null = null;
+  @state() private drag: Drag | null = null;
   @state() private cands: Record<GroupKind, GroupSensor[]> = { temperature: [], humidity: [] };
   private chain: Promise<unknown> = Promise.resolve();
   private seq: Record<GroupKind, number> = { temperature: 0, humidity: 0 };
@@ -224,31 +227,82 @@ class HomeStructureGroups extends LitElement {
     return html`<span class="menuwrap"><button class="dots" data-action=${action} aria-label=${this.t("more")} aria-haspopup="menu" @click=${() => (this.menu = open ? null : menu)}>⋮</button>${open ? this.renderMenu(menu) : nothing}</span>`;
   }
 
-  private renderCard(a: Area, g: Group | null, index: number, total: number) {
+  // ------------------------------------------------------------------ drag and drop (pointer events, so it works with a finger too)
+  private startDrag(e: PointerEvent, kind: "room" | "group", gid: string, id: string, order: string[]): void {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    e.preventDefault();
+    this.drag = { kind, gid, id, order: [...order] };
+    const start = order.join();
+    const root = this.shadowRoot!;
+    const items = (): HTMLElement[] => [...root.querySelectorAll<HTMLElement>(kind === "room" ? `[data-group="${gid}"] [data-room]` : "[data-group]:not(.ungrouped)")];
+    const area = (): DOMRect => (kind === "room" ? root.querySelector(`[data-group="${gid}"]`)! : this).getBoundingClientRect();
+    const stop = (): void => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", cancel);
+      window.removeEventListener("keydown", key);
+    };
+    const move = (ev: PointerEvent): void => {
+      const d = this.drag;
+      if (!d) return;
+      const target = nearestIndex(items().map((el) => el.getBoundingClientRect()), ev.clientX, ev.clientY, kind === "group");
+      const from = d.order.indexOf(d.id);
+      if (target >= 0 && target !== from) this.drag = { ...d, order: reorder(d.order, from, target) };
+    };
+    const up = (ev: PointerEvent): void => {
+      stop();
+      const d = this.drag;
+      this.drag = null;
+      if (!d || d.order.join() === start || !inside(area(), ev.clientX, ev.clientY, 24)) return;     // released outside: nothing changes
+      this.persist(kind === "room" ? setRoomOrder(this.groups, gid, d.order) : setGroupOrder(this.groups, d.order));
+    };
+    const cancel = (): void => { stop(); this.drag = null; };
+    const key = (ev: KeyboardEvent): void => { if (ev.key === "Escape") cancel(); };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", cancel);
+    window.addEventListener("keydown", key);
+  }
+
+  /** The arrow keys move a focused handle: the keyboard way to rearrange. */
+  private handleKey(e: KeyboardEvent, kind: "room" | "group", gid: string, id: string): void {
+    const delta = e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : 0;
+    if (!delta) return;
+    e.preventDefault();
+    this.persist(kind === "room" ? moveRoomInGroup(this.groups, gid, id, delta) : moveGroup(this.groups, id, delta));
+  }
+
+  private renderCard(a: Area, g: Group | null) {
     const rearranging = !!g && this.reorderRooms === g.id;
-    return html`<div class="card" data-room=${a.id}>
+    const dragging = this.drag?.kind === "room" && this.drag.id === a.id && this.drag.gid === g?.id;
+    return html`<div class="card ${rearranging ? "sortable" : ""} ${dragging ? "dragging" : ""}" data-room=${a.id}
+      @pointerdown=${rearranging ? (e: PointerEvent) => this.startDrag(e, "room", g!.id, a.id, this.known(g!.areas).map((x) => x.id)) : nothing}>
       <div class="cardtext"><strong>${a.name}</strong>${this.floorLabel(a) ? html`<small>${this.floorLabel(a)}</small>` : nothing}</div>
-      ${rearranging ? html`<span class="arrows">
-        <button class="arrow" data-action="room-earlier" ?disabled=${index === 0} aria-label=${this.t("earlier")} @click=${() => this.persist(moveRoomInGroup(this.groups, g!.id, a.id, -1))}>◀</button>
-        <button class="arrow" data-action="room-later" ?disabled=${index === total - 1} aria-label=${this.t("later")} @click=${() => this.persist(moveRoomInGroup(this.groups, g!.id, a.id, 1))}>▶</button></span>`
+      ${rearranging ? html`<span class="grip" role="button" tabindex="0" data-action="room-handle" aria-label=${this.t("moveItem")} @keydown=${(e: KeyboardEvent) => this.handleKey(e, "room", g!.id, a.id)}>⋮⋮</span>`
         : this.menuButton({ kind: "room", gid: g?.id ?? null, aid: a.id }, "room-menu")}
     </div>`;
   }
 
-  private renderGroup(g: Group, index: number) {
-    const rooms = this.known(g.areas);
+  private renderGroup(g: Group) {
+    const order = this.drag?.kind === "room" && this.drag.gid === g.id ? this.drag.order : g.areas;
+    const rooms = this.known(order);
     const rearranging = this.reorderRooms === g.id;
-    return html`<section class="group" data-group=${g.id}>
-      <header>
+    const dragging = this.drag?.kind === "group" && this.drag.id === g.id;
+    return html`<section class="group ${this.reorderGroups ? "compact" : ""} ${dragging ? "dragging" : ""}" data-group=${g.id}>
+      <header class=${this.reorderGroups ? "sortable" : ""} @pointerdown=${this.reorderGroups ? (e: PointerEvent) => this.startDrag(e, "group", "", g.id, this.groups.map((x) => x.id)) : nothing}>
         ${g.icon ? html`<ha-icon .icon=${g.icon}></ha-icon>` : nothing}
-        <h2>${g.name}</h2><small class="muted">${this.count(rooms.length)}</small>
+        <h2>${g.name}</h2><small class="muted">${this.count(this.known(g.areas).length)}</small>
         <span class="grow"></span>
-        ${this.reorderGroups ? html`<button class="arrow" data-action="group-up" ?disabled=${index === 0} aria-label=${this.t("earlier")} @click=${() => this.persist(moveGroup(this.groups, g.id, -1))}>▲</button>
-          <button class="arrow" data-action="group-down" ?disabled=${index === this.groups.length - 1} aria-label=${this.t("later")} @click=${() => this.persist(moveGroup(this.groups, g.id, 1))}>▼</button>`
+        ${this.reorderGroups ? html`<span class="grip" role="button" tabindex="0" data-action="group-handle" aria-label=${this.t("moveItem")} @keydown=${(e: KeyboardEvent) => this.handleKey(e, "group", "", g.id)}>⋮⋮</span>`
           : rearranging ? html`<button class="plain" data-action="rooms-done" @click=${() => (this.reorderRooms = null)}>${this.t("done")}</button>` : this.menuButton({ kind: "group", gid: g.id }, "group-menu")}
       </header>
-      <div class="cards">${rooms.map((a, i) => this.renderCard(a, g, i, rooms.length))}${rooms.length ? nothing : html`<p class="muted">${this.t("emptyGroup")}</p>`}</div>
+      ${this.reorderGroups ? nothing : html`<div class="cards">${repeat(rooms, (a) => a.id, (a) => this.renderCard(a, g))}${rooms.length ? nothing : html`<p class="muted">${this.t("emptyGroup")}</p>`}</div>`}
     </section>`;
+  }
+
+  private shownGroups(): Group[] {
+    const d = this.drag;
+    return d?.kind === "group" ? d.order.flatMap((id) => this.groups.filter((g) => g.id === id)) : this.groups;
   }
 
   private renderUngrouped() {
@@ -256,7 +310,7 @@ class HomeStructureGroups extends LitElement {
     if (!rest.length || !this.groups.length) return nothing;
     return html`<section class="group ungrouped" data-group="">
       <header><h2>${this.t("ungrouped")}</h2><small class="muted">${this.count(rest.length)}</small></header>
-      <div class="cards">${rest.map((a, i) => this.renderCard(a, null, i, rest.length))}</div></section>`;
+      <div class="cards">${rest.map((a) => this.renderCard(a, null))}</div></section>`;
   }
 
   private renderSensor(kind: GroupKind, d: Draft) {
@@ -338,7 +392,7 @@ class HomeStructureGroups extends LitElement {
         ${reordering ? html`<button class="plain" data-action="groups-done" @click=${() => (this.reorderGroups = false)}>${this.t("done")}</button>` : this.groups.length > 1 ? this.menuButton({ kind: "page" }, "page-menu") : nothing}
       </div>
       ${this.notice ? html`<p class="notice" data-notice role="status">${this.t("prunedNotice")} <button class="plain narrowbtn" @click=${() => (this.notice = false)}>×</button></p>` : nothing}
-      ${this.groups.map((g, i) => this.renderGroup(g, i))}
+      <div class="groups">${repeat(this.shownGroups(), (g) => g.id, (g) => this.renderGroup(g))}</div>
       ${this.groups.length ? nothing : html`<p class="muted empty" data-empty>${this.t("noGroups")}</p>`}
       ${this.renderUngrouped()}
       <button class="fab" data-action="add-group" @click=${() => this.openDialog(null)}>＋ ${this.t("add")}</button>
@@ -360,9 +414,12 @@ class HomeStructureGroups extends LitElement {
     .card { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 56px; padding: 8px 6px 8px 14px; background: var(--card-background-color); border: 1px solid var(--divider-color); border-radius: 12px; }
     .cardtext { display: flex; flex-direction: column; min-width: 0; } .cardtext strong { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .cardtext small { color: var(--secondary-text-color); }
     .menuwrap { position: relative; display: inline-block; }
-    .dots, .arrow, .x, .chipx { background: none; border: 0; color: var(--secondary-text-color); cursor: pointer; font: inherit; font-size: 1.3rem; line-height: 1; padding: 6px 8px; border-radius: 50%; }
-    .arrow { font-size: .95rem; } .arrow:disabled { opacity: .3; cursor: default; } .dots:hover, .arrow:hover:not(:disabled) { background: var(--secondary-background-color); }
-    .arrows { display: flex; }
+    .dots, .x, .chipx { background: none; border: 0; color: var(--secondary-text-color); cursor: pointer; font: inherit; font-size: 1.3rem; line-height: 1; padding: 6px 8px; border-radius: 50%; }
+    .dots:hover { background: var(--secondary-background-color); }
+    .sortable { cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+    .grip { color: var(--secondary-text-color); font-size: 1.2rem; letter-spacing: -3px; padding: 6px 10px; border-radius: 6px; cursor: grab; } .grip:focus-visible { outline: 2px solid var(--primary-color); }
+    .card.dragging, .group.dragging { opacity: .55; box-shadow: 0 6px 18px rgba(0,0,0,.3); border-color: var(--primary-color); }
+    .group.compact { margin: 6px 0; } .group.compact header { border-bottom: 0; margin-bottom: 0; padding: 12px 8px; background: var(--card-background-color); border: 1px solid var(--divider-color); border-radius: 12px; }
     .scrim { position: fixed; inset: 0; z-index: 20; }
     .menu { position: absolute; right: 0; top: 100%; z-index: 21; min-width: 230px; background: var(--card-background-color); border: 1px solid var(--divider-color); border-radius: 8px; box-shadow: 0 6px 24px rgba(0,0,0,.3); padding: 4px 0; }
     .item { display: block; width: 100%; text-align: left; font: inherit; background: none; border: 0; color: var(--primary-text-color); padding: 10px 16px; cursor: pointer; } .item:hover { background: var(--secondary-background-color); } .item.danger { color: var(--error-color, #db4437); }

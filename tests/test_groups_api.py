@@ -54,7 +54,7 @@ async def test_save_groups_normalizes_gives_ids_and_keeps_the_order(hass, hass_w
     assert [g["id"] for g in saved] == ["night_part", "day"] and saved[0]["name"] == "Night part" and saved[0]["aliases"] == ["Nuit"] and saved[0]["level"] == 1
     assert saved[1]["areas"] == [home["Living"], home["Bedroom"]] and saved[0]["temperature"] == {"mode": "none", "entities": []}
     again = await call(client, "save_groups", groups=list(reversed(saved)))
-    assert again["success"] and again["result"]["rebuilt"] is False                       # only the order changed: nothing is rebuilt
+    assert again["success"]
     assert [g["id"] for g in hass.config_entries.async_get_entry(entry.entry_id).options["groups"]] == ["day", "night_part"]
 
 
@@ -135,7 +135,7 @@ async def test_sensors_of_a_group(hass, hass_ws_client, home):
         group("avg", "Everything", areas, temperature={"mode": "all", "entities": []}, humidity={"mode": "selection", "entities": [h1, h2]}),
         group("one", "One", areas, temperature={"mode": "single", "entities": [t1]}),
         group("quiet", "Quiet", areas)])
-    assert r["success"] and r["result"]["rebuilt"] is True
+    assert r["success"] and "rebuilt" not in r["result"]
     await hass.async_block_till_done()
     reg = er.async_get(hass)
     ids = {e.unique_id: e.entity_id for e in er.async_entries_for_config_entry(reg, entry.entry_id)}
@@ -196,3 +196,49 @@ async def test_get_groups_service(hass, hass_ws_client, home):
     assert night["area_ids"] == [home["Kids"], home["Bedroom"]] and [a["name"] for a in night["areas"]] == ["Kids", "Bedroom"] and night["aliases"] == ["Nuit"]
     assert night["temperature"]["entity_id"].startswith("sensor.") and night["temperature"]["mode"] == "single" and night["humidity"]["entity_id"] is None
     assert empty["area_ids"] == [] and empty["icon"] is None
+
+
+async def test_editing_groups_never_reloads_the_integration(hass, hass_ws_client, home):
+    t1 = add_sensor(hass, home, "bed_temp", "Bedroom", "temperature", "20", "°C")
+    t2 = add_sensor(hass, home, "kids_temp", "Kids", "temperature", "30", "°C")
+    living, kitchen = f"area:{home['Living']}", f"area:{home['Office']}"
+    entry = await setup(hass, [])
+    client = await hass_ws_client(hass)
+    sep = {"zones": [], "connections": [{"id": "c", "a": living, "b": kitchen, "separations": [{"id": "s", "type": "opening"}]}],
+           "layout": {living: {"x": 0, "y": 0}, kitchen: {"x": 1, "y": 1}}}
+    await call(client, "save", options=sep)
+    await hass.async_block_till_done()
+    reg = er.async_get(hass)
+    separation = next(e.entity_id for e in er.async_entries_for_config_entry(reg, entry.entry_id))
+    started = hass.states.get(separation).last_updated
+    from unittest.mock import patch
+    with patch.object(hass.config_entries, "async_schedule_reload") as reload, patch.object(hass.config_entries, "async_reload") as reload2:
+        a, b = home["Bedroom"], home["Kids"]
+        # create: a group with a sensor appears at once
+        await call(client, "save_groups", groups=[group("night", "Night", [a], temperature={"mode": "single", "entities": [t1]})])
+        await hass.async_block_till_done()
+        gid = reg.async_get_entity_id("sensor", DOMAIN, f"{entry.entry_id}_group_night_temperature")
+        assert gid and float(hass.states.get(gid).state) == 20.0 and hass.states.get(gid).attributes["area_ids"] == [a]
+        # rooms and mode change: the same entity is updated, not replaced
+        await call(client, "save_groups", groups=[group("night", "Night", [a, b], temperature={"mode": "all", "entities": []})])
+        await hass.async_block_till_done()
+        st = hass.states.get(gid)
+        assert reg.async_get_entity_id("sensor", DOMAIN, f"{entry.entry_id}_group_night_temperature") == gid
+        assert float(st.state) == 25.0 and st.attributes["area_ids"] == [a, b] and st.attributes["mode"] == "all" and st.attributes["sources"] == [t1, t2]
+        # a rename shows in the name and keeps the entity id
+        await call(client, "save_groups", groups=[group("night", "Night time", [a, b], temperature={"mode": "all", "entities": []})])
+        await hass.async_block_till_done()
+        assert hass.states.get(gid).name.endswith("Night time · temperature")
+        # a second kind is added, then the first is switched off: its entity goes, the other stays
+        await call(client, "save_groups", groups=[group("night", "Night time", [a, b], humidity={"mode": "all", "entities": []})])
+        await hass.async_block_till_done()
+        assert hass.states.get(gid) is None and reg.async_get_entity_id("sensor", DOMAIN, f"{entry.entry_id}_group_night_temperature") is None
+        assert reg.async_get_entity_id("sensor", DOMAIN, f"{entry.entry_id}_group_night_humidity")
+        # deleting the group removes the rest
+        await call(client, "save_groups", groups=[])
+        await hass.async_block_till_done()
+        assert reg.async_get_entity_id("sensor", DOMAIN, f"{entry.entry_id}_group_night_humidity") is None
+        reload.assert_not_called()
+        reload2.assert_not_called()
+    assert hass.states.get(separation).last_updated == started                      # the separation sensors were never touched
+    assert entry.state.value == "loaded"

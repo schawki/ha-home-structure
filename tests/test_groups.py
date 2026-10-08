@@ -61,13 +61,6 @@ def test_prune_sensors():
     assert g.prune_sensors(every, {}) == [] and every["temperature"]["mode"] == "all"       # "all" is looked up every time: nothing to prune
 
 
-def test_structural_ignores_the_order_of_the_groups_only():
-    a, b = group(), g.normalize({"id": "day", "name": "Day"})
-    assert g.structural([a, b]) == g.structural([b, a])
-    assert g.structural([a]) != g.structural([group(areas=["kids", "bed"])])           # the order of the rooms shows in the attributes
-    assert g.structural([a]) != g.structural([group(name="Nuit")])
-
-
 def test_sources():
     assert g.sources({"mode": "none", "entities": []}, ["sensor.x"]) == []
     assert g.sources({"mode": "all", "entities": []}, ["sensor.x", "sensor.y"]) == ["sensor.x", "sensor.y"]

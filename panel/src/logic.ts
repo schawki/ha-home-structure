@@ -149,3 +149,40 @@ export function newGroupId(name: string, groups: Group[]): string {
   while (groups.some((g) => g.id === id)) id = `${base}_${++n}`;
   return id;
 }
+
+/** The list with the item at `from` taken out and put back at `to`. */
+export function reorder<T>(list: T[], from: number, to: number): T[] {
+  if (from < 0 || to < 0 || from >= list.length || to >= list.length || from === to) return list;
+  const out = [...list];
+  out.splice(to, 0, ...out.splice(from, 1));
+  return out;
+}
+
+export interface Box { left: number; top: number; right: number; bottom: number }
+
+/** Index of the box under the point, else of the nearest one (by its centre; only vertically when `vertical`). -1 without boxes. */
+export function nearestIndex(boxes: Box[], x: number, y: number, vertical = false): number {
+  let best = -1, bestDistance = Infinity;
+  boxes.forEach((b, i) => {
+    if (vertical ? y >= b.top && y <= b.bottom : x >= b.left && x <= b.right && y >= b.top && y <= b.bottom) { best = i; bestDistance = -1; return; }
+    if (bestDistance < 0) return;
+    const dx = vertical ? 0 : (b.left + b.right) / 2 - x, dy = (b.top + b.bottom) / 2 - y;
+    const d = Math.hypot(dx, dy);
+    if (d < bestDistance) { best = i; bestDistance = d; }
+  });
+  return best;
+}
+
+export function inside(b: Box, x: number, y: number, margin = 0): boolean {
+  return x >= b.left - margin && x <= b.right + margin && y >= b.top - margin && y <= b.bottom + margin;
+}
+
+/** The rooms of a group in the given order (rooms not listed keep their place at the end). */
+export function setRoomOrder(groups: Group[], gid: string, order: string[]): Group[] {
+  return edit(groups, gid, (g) => { g.areas = [...order, ...g.areas.filter((a) => !order.includes(a))]; });
+}
+
+export function setGroupOrder(groups: Group[], order: string[]): Group[] {
+  const by = new Map(groups.map((g) => [g.id, g]));
+  return [...order.flatMap((id) => (by.has(id) ? [by.get(id)!] : [])), ...groups.filter((g) => !order.includes(g.id))];
+}

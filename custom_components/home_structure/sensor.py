@@ -6,18 +6,18 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.event import async_track_state_change_event
 
 from . import groups as groups_mod, model, structure
-from .const import DOMAIN, PERMANENT, STATES
+from .const import DOMAIN, GROUPS_CHANGED, PERMANENT, STATES
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddConfigEntryEntitiesCallback) -> None:
     names = {s["id"]: s["name"] for s in model.spaces(entry.options, structure.areas(hass))}
     wanted = {f"{entry.entry_id}_{s['id']}" for c in entry.options.get("connections", []) for s in c["separations"]}
-    group_sensors = [(g, kind) for g in entry.options.get("groups", []) for kind in groups_mod.KINDS if g[kind]["mode"] != "none"]
-    wanted |= {f"{entry.entry_id}_group_{g['id']}_{kind}" for g, kind in group_sensors}
+    wanted |= set(group_unique_ids(entry))
     registry = er.async_get(hass)
     for reg in er.async_entries_for_config_entry(registry, entry.entry_id):       # separations that were removed leave no dead entity behind
         if reg.unique_id not in wanted:
@@ -26,7 +26,51 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
         SeparationSensor(entry, c, s, names.get(c["a"], c["a"]), names.get(c["b"], c["b"]))
         for c in entry.options.get("connections", []) for s in c["separations"]
     )
-    async_add_entities(GroupSensor(entry, g, kind) for g, kind in group_sensors)
+    manager = GroupSensors(hass, entry, async_add_entities)
+    manager.sync()
+    entry.async_on_unload(async_dispatcher_connect(hass, GROUPS_CHANGED.format(entry.entry_id), manager.sync))     # groups change without reloading the integration
+
+
+def group_unique_ids(entry: ConfigEntry) -> dict[str, tuple[dict, str]]:
+    """{unique id: (group, kind)} of the sensors the groups of the entry ask for (none for a kind whose mode is "none")."""
+    return {f"{entry.entry_id}_group_{g['id']}_{kind}": (g, kind)
+            for g in entry.options.get("groups", []) for kind in groups_mod.KINDS if g[kind]["mode"] != "none"}
+
+
+class GroupSensors:
+    """Keeps the group sensors in step with the groups: adds, updates and removes them as the options change, so nothing is reloaded."""
+
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddConfigEntryEntitiesCallback) -> None:
+        self.hass, self.entry, self._add = hass, entry, async_add_entities
+        self.entities: dict[str, GroupSensor] = {}
+
+    async def _replace(self, old: "GroupSensor", new: "GroupSensor") -> None:
+        await old.async_remove()
+        self._add([new])
+
+    @callback
+    def sync(self) -> None:
+        wanted = group_unique_ids(self.entry)
+        registry = er.async_get(self.hass)
+        for unique_id in [u for u in self.entities if u not in wanted]:
+            del self.entities[unique_id]
+            entity_id = registry.async_get_entity_id("sensor", DOMAIN, unique_id)
+            if entity_id:
+                registry.async_remove(entity_id)
+        new = []
+        for unique_id, (group, kind) in wanted.items():
+            current = self.entities.get(unique_id)
+            if current and current.group_name != group["name"]:
+                # Home Assistant keeps the name an entity had when it was added: a renamed group gets a fresh entity (same unique id, same entity id)
+                self.entities[unique_id] = replacement = GroupSensor(self.entry, group, kind)
+                self.hass.async_create_task(self._replace(current, replacement))
+            elif current:
+                current.update_group(group)
+            else:
+                self.entities[unique_id] = entity = GroupSensor(self.entry, group, kind)
+                new.append(entity)
+        if new:
+            self._add(new)
 
 
 class SeparationSensor(SensorEntity):
@@ -92,6 +136,10 @@ class GroupSensor(SensorEntity):
         self._used: list[str] = []
         self._unsub_states = None
 
+    @property
+    def group_name(self) -> str:
+        return self._group["name"]
+
     def _read(self, entity_id: str):
         st = self.hass.states.get(entity_id)
         return (st.state, dict(st.attributes)) if st else None
@@ -121,8 +169,21 @@ class GroupSensor(SensorEntity):
         self.async_write_ha_state()
 
     @callback
+    def update_group(self, group: dict) -> None:
+        """The group was edited: take its new name, rooms and settings, and read the sources again."""
+        self._group, self._cfg = group, group[self._kind]
+        if self.hass is None:
+            return
+        self._sources = self._find_sources()
+        self._watch()
+        self._refresh()
+        self.async_write_ha_state()
+
+    @callback
     def _on_registry(self, _event) -> None:
         """An entity or a device moved to another area: the sources of an average over all the sensors of the rooms may have changed."""
+        if self._cfg["mode"] != "all":
+            return
         found = self._find_sources()
         if found != self._sources:
             self._sources = found
@@ -135,6 +196,5 @@ class GroupSensor(SensorEntity):
         self._watch()
         self._refresh()
         self.async_on_remove(lambda: self._unsub_states and self._unsub_states())
-        if self._cfg["mode"] == "all":
-            self.async_on_remove(self.hass.bus.async_listen(er.EVENT_ENTITY_REGISTRY_UPDATED, self._on_registry))
-            self.async_on_remove(self.hass.bus.async_listen(dr.EVENT_DEVICE_REGISTRY_UPDATED, self._on_registry))
+        self.async_on_remove(self.hass.bus.async_listen(er.EVENT_ENTITY_REGISTRY_UPDATED, self._on_registry))
+        self.async_on_remove(self.hass.bus.async_listen(dr.EVENT_DEVICE_REGISTRY_UPDATED, self._on_registry))

@@ -121,11 +121,6 @@ def prune_sensors(group: dict, allowed: dict[str, set[str]]) -> list[str]:
     return changed
 
 
-def structural(groups: list[dict]) -> list[dict]:
-    """What the entities and the service depend on: everything but the order of the groups."""
-    return sorted(groups, key=lambda g: g["id"])
-
-
 def sources(cfg: dict, candidates: list[str]) -> list[str]:
     """The entities a group reads for one kind, given the candidates of its rooms."""
     mode = cfg.get("mode", "none")

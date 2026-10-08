@@ -1,6 +1,7 @@
 """Constants and vocabulary of Home Structure."""
 DOMAIN = "home_structure"
 PLATFORMS = ["sensor"]
+GROUPS_CHANGED = DOMAIN + "_groups_changed_{}"      # dispatcher signal (per config entry id): the groups were saved, the group sensors follow
 
 # What separates two adjacent spaces. The vocabulary is fixed so that every integration reading the structure speaks the same language.
 OPEN_SPACE = "open_space"      # no separation at all: one space split in zones (living room and hall)

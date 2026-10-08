@@ -130,24 +130,57 @@ with sync_playwright() as p:
 
     pg.close(); pg = new()
 
-    # ---- reorder rooms
-    q(pg, "[data-group=jour] [data-action=group-menu]").click(); q(pg, ".menu [data-action=reorder-rooms]").click()
-    ok(n(pg, "[data-group=jour] [data-action=room-earlier]") == len(rooms(pg, "jour")) and n(pg, "[data-group=jour] [data-action=room-menu]") == 0, "arrows replace the room menus while rearranging")
-    before = rooms(pg, "jour")
-    q(pg, f"[data-group=jour] [data-room={before[-1]}] [data-action=room-earlier]").click(); settle(pg)
-    after = rooms(pg, "jour")
-    ok(after[-2] == before[-1] and after[-1] == before[-2], "a room moves earlier")
-    ok(q(pg, f"[data-group=jour] [data-room={after[0]}] [data-action=room-earlier]").is_disabled(), "the first room cannot move earlier")
-    ok(last(pg)[1]["areas"] == after, "the new order is saved")
-    q(pg, "[data-action=rooms-done]").click()
-    ok(n(pg, "[data-action=room-earlier]") == 0, "Done leaves the mode")
+    def center(pg, sel):
+        r = q(pg, sel).bounding_box()
+        return r["x"] + r["width"] / 2, r["y"] + r["height"] / 2
 
-    # ---- reorder groups
+    def drag(pg, src, dst, release=None, steps=8, escape=False):
+        sx, sy = center(pg, src)
+        dx, dy = release if release else center(pg, dst)
+        pg.mouse.move(sx, sy); pg.mouse.down(); pg.mouse.move(dx, dy, steps=steps)
+        if escape:
+            pg.keyboard.press("Escape")
+        pg.mouse.up()
+
+    def saves(pg): return pg.evaluate("window.__s.groupSaves.length")
+
+    # ---- reorder rooms by dragging
+    q(pg, "[data-group=jour] [data-action=group-menu]").click(); q(pg, ".menu [data-action=reorder-rooms]").click()
+    ok(n(pg, "[data-group=jour] [data-action=room-handle]") == 3 and n(pg, "[data-group=jour] [data-action=room-menu]") == 0, "handles replace the room menus while rearranging")
+    ok(rooms(pg, "jour") == ["salon", "cuisine", "chambre"], "starting order")
+    drag(pg, "[data-group=jour] [data-room=chambre]", "[data-group=jour] [data-room=salon]"); settle(pg)
+    ok(rooms(pg, "jour") == ["chambre", "salon", "cuisine"] and last(pg)[1]["areas"] == ["chambre", "salon", "cuisine"], f"dragging a room to the front reorders it and saves {rooms(pg, 'jour')}")
+    drag(pg, "[data-group=jour] [data-room=chambre]", "[data-group=jour] [data-room=cuisine]"); settle(pg)
+    ok(rooms(pg, "jour") == ["salon", "cuisine", "chambre"], "and to the end")
+    before = saves(pg)
+    sx, sy = center(pg, "[data-group=jour] [data-room=salon]")
+    drag(pg, "[data-group=jour] [data-room=salon]", None, release=(sx, sy + 500))
+    ok(saves(pg) == before and rooms(pg, "jour") == ["salon", "cuisine", "chambre"], "released outside the group: nothing changes")
+    drag(pg, "[data-group=jour] [data-room=salon]", "[data-group=jour] [data-room=chambre]", escape=True)
+    ok(saves(pg) == before and rooms(pg, "jour") == ["salon", "cuisine", "chambre"], "Escape cancels the drag")
+    pg.mouse.move(5, 5)
+    ok(n(pg, "[data-group=nuit] [data-action=room-handle]") == 0, "only the group being rearranged has handles")
+    q(pg, "[data-group=jour] [data-room=salon] [data-action=room-handle]").focus(); pg.keyboard.press("ArrowRight"); settle(pg)
+    ok(rooms(pg, "jour") == ["cuisine", "salon", "chambre"] and last(pg)[1]["areas"] == ["cuisine", "salon", "chambre"], "the arrow keys move a focused handle")
+    pg.screenshot(path=f"{OUT}/g6-rearrange.png")
+    q(pg, "[data-action=rooms-done]").click()
+    ok(n(pg, "[data-action=room-handle]") == 0, "Done leaves the mode")
+
+    # ---- reorder groups by dragging
     q(pg, "[data-action=page-menu]").click(); q(pg, ".menu [data-action=reorder-groups]").click()
-    q(pg, "[data-group=vide] [data-action=group-up]").click(); settle(pg)
-    ok(order(pg) == ["nuit", "vide", "jour"] and [g["id"] for g in last(pg)] == ["nuit", "vide", "jour"], "a group moves up and the order is saved")
-    ok(q(pg, "[data-group=nuit] [data-action=group-up]").is_disabled() and n(pg, "[data-action=group-menu]") == 0, "limits and no menus while rearranging groups")
+    ok(n(pg, "[data-group=nuit] .cards") == 0 and n(pg, "[data-action=group-handle]") == 3 and n(pg, "[data-action=group-menu]") == 0, "the groups collapse to their headers, with handles")
+    pg.screenshot(path=f"{OUT}/g7-rearrange-groups.png")
+    drag(pg, "[data-group=vide] header", "[data-group=nuit] header"); settle(pg)
+    ok(order(pg) == ["vide", "nuit", "jour"] and [g["id"] for g in last(pg)] == ["vide", "nuit", "jour"], f"a group dragged to the top, order saved {order(pg)}")
+    drag(pg, "[data-group=vide] header", "[data-group=jour] header"); settle(pg)
+    ok(order(pg) == ["nuit", "jour", "vide"], "and to the bottom")
+    before = saves(pg)
+    drag(pg, "[data-group=nuit] header", "[data-group=vide] header", escape=True)
+    ok(saves(pg) == before and order(pg) == ["nuit", "jour", "vide"], "Escape cancels")
+    q(pg, "[data-group=nuit] [data-action=group-handle]").focus(); pg.keyboard.press("ArrowDown"); settle(pg)
+    ok(order(pg) == ["jour", "nuit", "vide"], "the arrow keys move a group")
     q(pg, "[data-action=groups-done]").click()
+    ok(n(pg, "[data-group=nuit] .cards") == 1 and n(pg, "[data-action=group-handle]") == 0, "Done brings the rooms back")
 
     # ---- edit
     q(pg, "[data-group=nuit] [data-action=group-menu]").click(); q(pg, ".menu [data-action=edit-group]").click()
@@ -171,7 +204,7 @@ with sync_playwright() as p:
     q(pg, "[data-action=confirm-cancel]").click()
     ok(n(pg, "[data-group=vide]") == 1, "Cancel keeps the group")
     q(pg, "[data-group=vide] [data-action=group-menu]").click(); q(pg, ".menu [data-action=delete-group]").click(); q(pg, "[data-action=confirm-delete]").click(); settle(pg)
-    ok(n(pg, "[data-group=vide]") == 0 and [x["id"] for x in last(pg)] == ["nuit", "jour"], "the group is deleted")
+    ok(n(pg, "[data-group=vide]") == 0 and [x["id"] for x in last(pg)] == ["jour", "nuit"], "the group is deleted")
     pg.close()
 
     # ---- the plan tab still works and does not own the groups

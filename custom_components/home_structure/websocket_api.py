@@ -8,9 +8,10 @@ import voluptuous as vol
 from homeassistant.components import websocket_api
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from . import groups as groups_mod, model, structure
-from .const import DOMAIN, PERMANENT, SENSOR_DOMAINS, ROOM_TYPES, ROOM_TYPE_GROUPS, SEPARATION_TYPES, SHUTTER_HOSTS, ZONE_IN_HOME, ZONE_KINDS
+from .const import DOMAIN, GROUPS_CHANGED, PERMANENT, SENSOR_DOMAINS, ROOM_TYPES, ROOM_TYPE_GROUPS, SEPARATION_TYPES, SHUTTER_HOSTS, ZONE_IN_HOME, ZONE_KINDS
 
 
 def _entry(hass: HomeAssistant) -> ConfigEntry | None:
@@ -77,7 +78,7 @@ async def ws_save_groups(hass: HomeAssistant, connection: websocket_api.ActiveCo
     """Replaces the groups of rooms (their order is the order of the list).
 
     Areas that no longer exist and sensors that are no longer in the rooms of a group are taken out (`pruned` lists the groups concerned).
-    The entities are rebuilt only when something other than the order of the groups changed."""
+    The group sensors are added, updated or removed on the spot; nothing is reloaded."""
     entry = _entry(hass)
     if entry is None:
         connection.send_error(msg["id"], "not_loaded", "Home Structure is not set up")
@@ -99,11 +100,9 @@ async def ws_save_groups(hass: HomeAssistant, connection: websocket_api.ActiveCo
     if errors:
         connection.send_error(msg["id"], "invalid", ", ".join(errors))
         return
-    rebuild = groups_mod.structural(groups) != groups_mod.structural(entry.options.get("groups", []))
     hass.config_entries.async_update_entry(entry, options={**_options(entry), "groups": groups})
-    if rebuild:
-        hass.config_entries.async_schedule_reload(entry.entry_id)
-    connection.send_result(msg["id"], {"groups": groups, "pruned": pruned, "rebuilt": rebuild})
+    async_dispatcher_send(hass, GROUPS_CHANGED.format(entry.entry_id))                       # the group sensors follow on the spot: no reload
+    connection.send_result(msg["id"], {"groups": groups, "pruned": pruned})
 
 
 @websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/group_sensors", vol.Required("area_ids"): [str], vol.Required("kind"): vol.In(groups_mod.KINDS)})
