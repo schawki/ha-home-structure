@@ -9,7 +9,7 @@ from homeassistant.components import websocket_api
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 
-from . import model, structure
+from . import groups as groups_mod, model, structure
 from .const import DOMAIN, PERMANENT, SENSOR_DOMAINS, ROOM_TYPES, ROOM_TYPE_GROUPS, SEPARATION_TYPES, SHUTTER_HOSTS, ZONE_IN_HOME, ZONE_KINDS
 
 
@@ -19,7 +19,7 @@ def _entry(hass: HomeAssistant) -> ConfigEntry | None:
 
 
 def _options(entry: ConfigEntry) -> dict:
-    return copy.deepcopy({"zones": [], "connections": [], "excluded_areas": [], "layout": {}, "room_types": {}, **entry.options})
+    return copy.deepcopy({"zones": [], "connections": [], "excluded_areas": [], "layout": {}, "room_types": {}, "groups": [], **entry.options})
 
 
 @websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/get"})
@@ -33,6 +33,7 @@ def ws_get(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg:
     connection.send_result(msg["id"], {
         "areas": structure.areas(hass), "options": _options(entry), "kinds": ZONE_KINDS, "types": SEPARATION_TYPES,
         "in_home": ZONE_IN_HOME, "permanent": PERMANENT, "sensor_domains": SENSOR_DOMAINS, "shutter_hosts": SHUTTER_HOSTS, "room_types": ROOM_TYPES, "room_type_groups": ROOM_TYPE_GROUPS,
+        "group_modes": list(groups_mod.MODES),
     })
 
 
@@ -46,6 +47,7 @@ async def ws_save(hass: HomeAssistant, connection: websocket_api.ActiveConnectio
         connection.send_error(msg["id"], "not_loaded", "Home Structure is not set up")
         return
     data = {"zones": [], "connections": [], "excluded_areas": [], "layout": {}, "room_types": {}, **copy.deepcopy(msg["options"])}
+    data["groups"] = copy.deepcopy(entry.options.get("groups", []))        # the groups have their own command: a plan saved late never overwrites them
     area_ids = {a["id"] for a in structure.areas(hass)}
     model.apply_layout(data, area_ids)
     errors = model.validate(data, area_ids)
@@ -68,7 +70,51 @@ def ws_candidates(hass: HomeAssistant, connection: websocket_api.ActiveConnectio
     connection.send_result(msg["id"], {"sensors": found or structure.all_sensors(hass), "filtered": bool(found)})
 
 
-COMMANDS = (ws_get, ws_save, ws_candidates)
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/save_groups", vol.Required("groups"): [dict]})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_save_groups(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    """Replaces the groups of rooms (their order is the order of the list).
+
+    Areas that no longer exist and sensors that are no longer in the rooms of a group are taken out (`pruned` lists the groups concerned).
+    The entities are rebuilt only when something other than the order of the groups changed."""
+    entry = _entry(hass)
+    if entry is None:
+        connection.send_error(msg["id"], "not_loaded", "Home Structure is not set up")
+        return
+    area_ids = {a["id"] for a in structure.areas(hass)}
+    groups = [groups_mod.normalize(g) for g in msg["groups"]]
+    taken = {g["id"] for g in groups if g["id"]}
+    for g in groups:
+        if not g["id"] and g["name"]:
+            g["id"] = groups_mod.unique_id(g["name"], taken)
+            taken.add(g["id"])
+    groups_mod.prune_areas(groups, area_ids)
+    pruned = []
+    for g in groups:
+        allowed = {k: {s["entity_id"] for s in structure.group_sensors(hass, g["areas"], k)} for k in groups_mod.KINDS}
+        if groups_mod.prune_sensors(g, allowed):
+            pruned.append(g["id"])
+    errors = groups_mod.validate(groups, area_ids)
+    if errors:
+        connection.send_error(msg["id"], "invalid", ", ".join(errors))
+        return
+    rebuild = groups_mod.structural(groups) != groups_mod.structural(entry.options.get("groups", []))
+    hass.config_entries.async_update_entry(entry, options={**_options(entry), "groups": groups})
+    if rebuild:
+        hass.config_entries.async_schedule_reload(entry.entry_id)
+    connection.send_result(msg["id"], {"groups": groups, "pruned": pruned, "rebuilt": rebuild})
+
+
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/group_sensors", vol.Required("area_ids"): [str], vol.Required("kind"): vol.In(groups_mod.KINDS)})
+@websocket_api.require_admin
+@callback
+def ws_group_sensors(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    """Temperature or humidity sensors of the given rooms (diagnostic entities left out), for the group editor."""
+    connection.send_result(msg["id"], {"sensors": structure.group_sensors(hass, msg["area_ids"], msg["kind"])})
+
+
+COMMANDS = (ws_get, ws_save, ws_candidates, ws_save_groups, ws_group_sensors)
 
 
 def async_register(hass: HomeAssistant) -> None:

@@ -276,6 +276,12 @@
           "closed": "Closed",
           "partial": "Partly open"
         }
+      },
+      "group_temperature": {
+        "name": "{group} · temperature"
+      },
+      "group_humidity": {
+        "name": "{group} · humidity"
       }
     }
   },
@@ -283,6 +289,10 @@
     "get_structure": {
       "name": "Get structure",
       "description": "Returns the spaces of the home, how they are connected and the current state of every separation."
+    },
+    "get_groups": {
+      "name": "Get groups",
+      "description": "Returns the groups of rooms: their rooms (area ids), aliases and the sensors that give their temperature and humidity."
     }
   },
   "exceptions": {

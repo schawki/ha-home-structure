@@ -5,7 +5,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar, device_registry as dr, entity_registry as er, floor_registry as fr
 
-from . import model
+from . import groups as groups_mod, model
 from .const import DOMAIN
 
 
@@ -67,3 +67,35 @@ def all_sensors(hass: HomeAssistant) -> list[dict]:
     """Every binary_sensor and cover (fallback when no candidate is found in the two areas)."""
     return [{"entity_id": s.entity_id, "name": s.name, "state": s.state} for s in sorted(
         (*hass.states.async_all("binary_sensor"), *hass.states.async_all("cover")), key=lambda s: s.name.casefold())]
+
+
+def group_sensors(hass: HomeAssistant, area_ids: list[str], kind: str) -> list[dict]:
+    """The temperature or humidity sensors of the given areas (on the entity itself or on its device), for the groups.
+
+    Diagnostic and configuration entities, disabled and hidden entities and the sensors of Home Structure itself are left out.
+    Sorted by area then name; each is {entity_id, name, state, unit, area_id}."""
+    entities, devices, areas_reg = er.async_get(hass), dr.async_get(hass), ar.async_get(hass)
+    wanted, out = set(area_ids), []
+    for e in entities.entities.values():
+        if e.domain != "sensor" or e.platform == DOMAIN or e.disabled or e.hidden_by or e.entity_category is not None:
+            continue
+        device = devices.async_get(e.device_id) if e.device_id else None
+        area = e.area_id or (device.area_id if device else None)
+        if area not in wanted:
+            continue
+        state = hass.states.get(e.entity_id)
+        if (e.device_class or e.original_device_class or (state.attributes.get("device_class") if state else None)) != kind:
+            continue
+        found = areas_reg.async_get_area(area)
+        out.append({"entity_id": e.entity_id, "name": (state.name if state else None) or e.name or e.original_name or e.entity_id,
+                    "state": state.state if state else "unknown",
+                    "unit": (state.attributes.get("unit_of_measurement") if state else None) or groups_mod.UNIT[kind],
+                    "area_id": area, "area": found.name if found else area})
+    return sorted(out, key=lambda s: (s["area"].casefold(), s["name"].casefold()))
+
+
+def group_view(hass: HomeAssistant, entry: ConfigEntry) -> list[dict]:
+    """The groups with the entity of each group sensor: what the service `get_groups` returns."""
+    registry = er.async_get(hass)
+    return groups_mod.view(entry.options.get("groups", []), areas(hass),
+                           lambda gid, kind: registry.async_get_entity_id("sensor", DOMAIN, f"{entry.entry_id}_group_{gid}_{kind}"))

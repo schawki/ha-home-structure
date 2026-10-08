@@ -220,7 +220,7 @@ def test_english_covers_the_vocabulary():
     en = json.loads((TRANSLATIONS / "en.json").read_text())
     assert set(en["selector"]["zone_kind"]["options"]) == set(ZONE_KINDS)
     assert set(en["selector"]["separation_type"]["options"]) == set(SEPARATION_TYPES)
-    assert {f"sep_{t}" for t in SEPARATION_TYPES} == set(en["entity"]["sensor"])
+    assert {f"sep_{t}" for t in SEPARATION_TYPES} | {"group_temperature", "group_humidity"} == set(en["entity"]["sensor"])
 
 
 # ------------------------------------------------------------------------------------------------ quick setup

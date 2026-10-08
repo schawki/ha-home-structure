@@ -1,4 +1,4 @@
-import type { Area, Bootstrap, Conn, Hass, Options, Pos, Sep, SepState, Space } from "./types";
+import type { Area, Bootstrap, Conn, Group, Hass, Options, Pos, Sep, SepState, Space } from "./types";
 
 export const BOX_W = 168;
 export const BOX_H = 58;
@@ -89,4 +89,63 @@ export function slug(text: string): string {
 
 export function clone<T>(v: T): T {
   return JSON.parse(JSON.stringify(v)) as T;
+}
+
+
+// ---------------------------------------------------------------------------------------------- groups of rooms
+export function groupsOf(groups: Group[], areaId: string): Group[] {
+  return groups.filter((g) => g.areas.includes(areaId));
+}
+
+/** Rooms that are in no group. */
+export function ungrouped(areas: Area[], groups: Group[]): Area[] {
+  return areas.filter((a) => !groups.some((g) => g.areas.includes(a.id)));
+}
+
+function edit(groups: Group[], gid: string, fn: (g: Group) => void): Group[] {
+  const out = clone(groups);
+  const g = out.find((x) => x.id === gid);
+  if (g) fn(g);
+  return out;
+}
+
+export function addRoom(groups: Group[], gid: string, areaId: string): Group[] {
+  return edit(groups, gid, (g) => { if (!g.areas.includes(areaId)) g.areas.push(areaId); });
+}
+
+export function removeRoom(groups: Group[], gid: string, areaId: string): Group[] {
+  return edit(groups, gid, (g) => { g.areas = g.areas.filter((a) => a !== areaId); });
+}
+
+export function removeFromAll(groups: Group[], areaId: string): Group[] {
+  return groups.reduce((acc, g) => removeRoom(acc, g.id, areaId), groups);
+}
+
+export function moveRoom(groups: Group[], from: string, to: string, areaId: string): Group[] {
+  return addRoom(removeRoom(groups, from, areaId), to, areaId);
+}
+
+/** Moves an item one place earlier (-1) or later (+1) in a list; the list is returned as it is at either end. */
+export function shift<T>(list: T[], index: number, delta: -1 | 1): T[] {
+  const to = index + delta;
+  if (index < 0 || to < 0 || to >= list.length) return list;
+  const out = [...list];
+  [out[index], out[to]] = [out[to], out[index]];
+  return out;
+}
+
+export function moveGroup(groups: Group[], gid: string, delta: -1 | 1): Group[] {
+  return shift(groups, groups.findIndex((g) => g.id === gid), delta);
+}
+
+export function moveRoomInGroup(groups: Group[], gid: string, areaId: string, delta: -1 | 1): Group[] {
+  return edit(groups, gid, (g) => { g.areas = shift(g.areas, g.areas.indexOf(areaId), delta); });
+}
+
+/** Id of a new group: the slug of its name, with a number when taken (the integration builds the same one). */
+export function newGroupId(name: string, groups: Group[]): string {
+  const base = slug(name);
+  let id = base, n = 1;
+  while (groups.some((g) => g.id === id)) id = `${base}_${++n}`;
+  return id;
 }

@@ -276,6 +276,12 @@
           "closed": "Fermé",
           "partial": "Partiellement ouvert"
         }
+      },
+      "group_temperature": {
+        "name": "{group} · température"
+      },
+      "group_humidity": {
+        "name": "{group} · humidité"
       }
     }
   },
@@ -283,6 +289,10 @@
     "get_structure": {
       "name": "Obtenir la structure",
       "description": "Renvoie les espaces du logement, leurs liaisons et l'état actuel de chaque séparation."
+    },
+    "get_groups": {
+      "name": "Obtenir les groupes",
+      "description": "Renvoie les groupes de pièces : leurs pièces (identifiants de pièces), alias et les capteurs qui donnent leur température et leur humidité."
     }
   },
   "exceptions": {

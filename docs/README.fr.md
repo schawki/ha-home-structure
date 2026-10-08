@@ -54,10 +54,38 @@ Ouvrez **Home Structure** dans la barre latérale. Vous voyez un plan que vous o
 
 Sur un écran étroit, le plan devient une liste avec les mêmes possibilités. Les anciens écrans (*Configurer* sur l'intégration) fonctionnent toujours et modifient les mêmes données.
 
+## Groupes de pièces
+
+L'onglet **Groupes** du panneau réunit des pièces en groupes à vous : les chambres, la partie nuit du logement, les pièces côté rue… Home Assistant ne regroupe les pièces que par étage ; un groupe n'a pas cette limite, donc **une pièce peut être dans plusieurs groupes** (ou dans aucun), et rien n'est deviné d'après les noms.
+
+![L'onglet Groupes : des groupes de pièces présentés comme les étages de la page Pièces](images/groups.png)
+
+- La page fonctionne comme la page Pièces de Home Assistant : une section par groupe avec une carte par pièce, **+ Ajouter** en bas à droite pour créer un groupe, et un menu ⋮ sur chaque groupe (**Réorganiser les pièces**, **Modifier le groupe**, **Supprimer le groupe**). Le menu ⋮ du haut réorganise les groupes eux-mêmes. L'ordre choisi est conservé.
+- Le menu ⋮ d'une carte de pièce permet de la **déplacer vers un autre groupe**, de l'**ajouter à un autre groupe**, de la **retirer de ce groupe** ou **de tous les groupes**. Les pièces sans groupe sont listées en bas.
+- **Modifier le groupe** contient un ID (fixé à la création, jamais modifié), un nom, une icône, les pièces (pastilles, avec **Ajouter une pièce**), des alias et un *niveau* (conservé, sans effet pour l'instant). Les alias sont d'autres noms pour vos propres modèles et scripts : ils figurent dans le service et les attributs ci-dessous ; Assist ne les lit pas.
+- **Température et humidité.** Pour chacune, choisissez *Aucun capteur*, *Un seul capteur* (parmi ceux des pièces du groupe), *Moyenne de tous les capteurs des pièces* ou *Moyenne d'une sélection*. Les entités de diagnostic et de configuration ne sont jamais proposées, et la fenêtre montre chaque source avec sa valeur. « Tous » est recalculé à chaque fois : un capteur déplacé vers ou depuis ces pièces est suivi automatiquement. Un groupe avec un capteur reçoit une entité `sensor` (par exemple `sensor.home_structure_night_temperature`) avec les attributs `group`, `mode`, `area_ids`, `sources` et `used_sources`. Une source indisponible, non numérique ou absurde (une humidité supérieure à 100 %) est ignorée au lieu d'être comptée comme zéro ; les sources en Fahrenheit ou en Kelvin sont converties. Si une pièce quitte un groupe, les capteurs qui ne sont plus dans les pièces du groupe sont retirés de ses réglages et le panneau vous le dit.
+- Un groupe peut être vide, et supprimer un groupe ne touche jamais à ses pièces.
+
+Utilisez les pièces d'un groupe partout où Home Assistant accepte une pièce, en lisant la liste avec le service :
+
+```yaml
+actions:
+  - action: home_structure.get_groups
+    response_variable: result
+  - action: light.turn_off
+    target:
+      area_id: "{{ (result.groups | selectattr('id', 'eq', 'night') | first).area_ids }}"
+```
+
+Qu'un appareil sache agir sur des pièces dépend de l'appareil et de son intégration (un aspirateur qui nettoie par pièce, par exemple, dépend de ce que son intégration propose) ; Home Structure fournit seulement la liste des pièces.
+
+Les étiquettes de Home Assistant donnent aussi plusieurs appartenances et peuvent être ciblées, mais elles s'appliquent à n'importe quoi. Les groupes ne contiennent que des pièces, se présentent comme des étages, et peuvent donner une température et une humidité pour tout le groupe.
+
 ## Ce que vous obtenez
 
 - **Un capteur par séparation**, avec l'état ouvert, fermé ou partiel (inconnu quand il ne peut pas être lu) et les attributs `type`, `space_a`, `space_b`, `name_a`, `name_b`, `sensor` et `position`. Utilisable dans les automatisations, les modèles et les tableaux de bord.
 - **Un service** `home_structure.get_structure`, qui renvoie toute la structure avec les états actuels, pour les intégrations (exemple complet de la réponse dans le [README anglais](../README.md)).
+- **Un service** `home_structure.get_groups`, qui renvoie les groupes de pièces : `id`, `name`, `level`, `icon`, `aliases`, `area_ids`, `areas` (id et nom) et, pour `temperature` et `humidity`, le `mode`, les `entities` choisies et l'`entity_id` du capteur du groupe (nul sans capteur).
 
 ## Dans une automatisation
 
@@ -90,7 +118,7 @@ L'anglais est la référence, le français est inclus. Pour ajouter une langue, 
 
 ## État du projet
 
-Version 0.6, testée (les tests du backend et du panneau tournent à chaque commit) et utilisée avec Sound Recognition. Le logement se décrit dans le panneau **Home Structure** de la barre latérale (un plan que vous organisez, avec enregistrement automatique et annulation) ; les menus *Configurer* de l'intégration restent en secours. Retours et tickets bienvenus.
+Version 0.7, testée (les tests du backend et du panneau tournent à chaque commit) et utilisée avec Sound Recognition. Le logement se décrit dans le panneau **Home Structure** de la barre latérale (un plan que vous organisez, avec enregistrement automatique et annulation) ; les menus *Configurer* de l'intégration restent en secours. Les groupes de pièces sont dans l'onglet **Groupes**. Retours et tickets bienvenus.
 
 ## Licence
 

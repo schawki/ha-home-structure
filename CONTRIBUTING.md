@@ -24,7 +24,7 @@ These are shared vocabulary that other integrations read, so they change rarely.
 
 ## Code
 
-`model.py` is pure Python (no Home Assistant) and holds the rules; keep new rules there with a test. `python -m pytest tests -q` needs `pytest-homeassistant-custom-component`.
+`model.py` and `groups.py` are pure Python (no Home Assistant) and hold the rules; keep new rules there with a test. `python -m pytest tests -q` needs `pytest-homeassistant-custom-component`.
 
 ## Releasing
 

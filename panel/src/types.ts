@@ -3,7 +3,12 @@ export interface Sep { id: string; type: string; sensor?: string; shutter?: stri
 export interface Conn { id: string; a: string; b: string; separations: Sep[] }
 export interface Zone { id: string; kind: string; in_home: boolean; name?: string }
 export interface Pos { x: number; y: number }
-export interface Options { zones: Zone[]; connections: Conn[]; excluded_areas: string[]; layout: Record<string, Pos>; room_types: Record<string, string> }
+export type SensorMode = "none" | "single" | "all" | "selection";
+export type GroupKind = "temperature" | "humidity";
+export interface SensorCfg { mode: SensorMode; entities: string[] }
+export interface Group { id: string; name: string; level: number | null; icon: string | null; areas: string[]; aliases: string[]; temperature: SensorCfg; humidity: SensorCfg }
+export interface GroupSensor { entity_id: string; name: string; state: string; unit: string; area_id: string; area: string }
+export interface Options { zones: Zone[]; connections: Conn[]; excluded_areas: string[]; layout: Record<string, Pos>; room_types: Record<string, string>; groups?: Group[] }
 export interface Bootstrap { areas: Area[]; options: Options; kinds: string[]; types: string[]; in_home: Record<string, boolean>; room_type_groups: Record<string, string[]>; permanent: Record<string, string>; sensor_domains: string[]; shutter_hosts: string[]; room_types: string[] }
 export interface Sensor { entity_id: string; name: string; state: string }
 export interface Candidates { sensors: Sensor[]; filtered: boolean }

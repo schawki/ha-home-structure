@@ -18,6 +18,7 @@ from . import structure, websocket_api as panel_ws
 from .const import DOMAIN, PLATFORMS
 
 SERVICE_GET_STRUCTURE = "get_structure"
+SERVICE_GET_GROUPS = "get_groups"
 CONFIG_SCHEMA = vol.Schema({DOMAIN: vol.Schema({})}, extra=vol.ALLOW_EXTRA)
 
 
@@ -28,7 +29,14 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             raise ServiceValidationError(translation_domain=DOMAIN, translation_key="not_loaded")
         return structure.current(hass, entries[0])
 
+    async def get_groups(call: ServiceCall) -> dict:
+        entries = [e for e in hass.config_entries.async_entries(DOMAIN) if e.state is ConfigEntryState.LOADED]
+        if not entries:
+            raise ServiceValidationError(translation_domain=DOMAIN, translation_key="not_loaded")
+        return {"groups": structure.group_view(hass, entries[0])}
+
     hass.services.async_register(DOMAIN, SERVICE_GET_STRUCTURE, get_structure, supports_response=SupportsResponse.ONLY)
+    hass.services.async_register(DOMAIN, SERVICE_GET_GROUPS, get_groups, supports_response=SupportsResponse.ONLY)
     return True
 
 

@@ -17,7 +17,14 @@
   const RTG = { sleeping: ["bedroom", "master_bedroom", "child_bedroom", "nursery", "guest_room"], living: ["living_room", "dining_room", "game_room", "home_cinema", "gym"], work: ["office", "workshop"], water: ["bathroom", "toilet"], service: ["kitchen", "pantry", "laundry", "utility_room", "dressing", "storage", "cellar", "attic"], circulation: ["hallway", "entrance", "staircase"] };
   let options = { zones: [], connections: [], excluded_areas: [], layout: {}, room_types: {} };
   if (q.get("legacy")) options = { zones: [], connections: [{ id: "c1", a: "area:salon", b: "area:cuisine", separations: [{ id: "s1", type: "door", sensor: "binary_sensor.porte" }] }], excluded_areas: [], layout: {} };
-  S.options = options;
+  const seed = (id, name, areas, extra = {}) => ({ id, name, level: null, icon: null, areas, aliases: [], temperature: { mode: "none", entities: [] }, humidity: { mode: "none", entities: [] }, ...extra });
+  if (q.get("groups")) options.groups = [
+    seed("nuit", "Night", ["chambre", "bureau"], { icon: "mdi:bed", aliases: ["Nuit"] }), seed("jour", "Day", ["salon", "cuisine", "chambre"]), seed("vide", "Empty", [])];
+  S.options = options; S.groupSaves = [];
+  const SENSORS = {
+    temperature: [["salon", "sensor.salon_temp", "Salon temperature", "21", "°C"], ["chambre", "sensor.chambre_temp", "Chambre temperature", "19", "°C"], ["bureau", "sensor.bureau_temp", "Bureau temperature", "68", "°F"]],
+    humidity: [["chambre", "sensor.chambre_hum", "Chambre humidity", "55", "%"], ["bureau", "sensor.bureau_hum", "Bureau humidity", "45", "%"]],
+  };
   const kinds = ["garden", "balcony", "terrace", "courtyard", "garage", "hall", "stairwell", "common_area", "street", "neighbor", "other"];
   const inHome = { garden: true, balcony: true, terrace: true, courtyard: false, garage: true, hall: false, stairwell: false, common_area: false, street: false, neighbor: false, other: false };
   const hass = {
@@ -31,6 +38,14 @@
         S.options = JSON.parse(JSON.stringify(msg.options)); S.saves.push(S.options);
         return { options: S.options, rebuilt: true };
       }
+      if (msg.type === "home_structure/save_groups") {
+        if (S.fail === "groups") throw { message: "nope" };
+        const taken = new Set(); const groups = JSON.parse(JSON.stringify(msg.groups));
+        groups.forEach((g) => { if (!g.id) g.id = g.name.toLowerCase().replace(/[^a-z0-9]+/g, "_"); taken.add(g.id); });
+        S.groupSaves.push(groups); S.options.groups = groups;
+        return { groups, pruned: S.prune ? ["nuit"] : [], rebuilt: true };
+      }
+      if (msg.type === "home_structure/group_sensors") return { sensors: SENSORS[msg.kind].filter((s) => msg.area_ids.includes(s[0])).map((s) => ({ entity_id: s[1], name: s[2], state: s[3], unit: s[4], area_id: s[0], area: areas.find((a) => a.id === s[0]).name })) };
       if (msg.type === "home_structure/candidates") return { sensors: [{ entity_id: "binary_sensor.porte", name: "Porte", state: "off" }, { entity_id: "cover.volet", name: "Volet", state: "open" }], filtered: true };
       throw new Error("unknown " + msg.type);
     },

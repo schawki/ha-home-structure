@@ -54,6 +54,33 @@ Open **Home Structure** in the sidebar. You see a plan you arrange yourself, and
 
 On a narrow screen the plan becomes a list with the same editing. The older configuration screens (*Configure* on the integration) still work and edit the same data.
 
+## Groups of rooms
+
+The **Groups** tab of the panel gathers rooms into groups of your own: the bedrooms, the night part of the home, the rooms that face the street… Home Assistant only groups areas by floor; a group has no such limit, so a **room can be in several groups** (or in none), and nothing is guessed from names.
+
+![The Groups tab: groups of rooms laid out like the floors of the Areas page](docs/images/groups.png)
+
+- The page works like the Areas page of Home Assistant: one section per group with a card per room, **+ Add** at the bottom right to create a group, and a ⋮ menu on each group (**Rearrange rooms**, **Edit group**, **Delete group**). The ⋮ menu at the top rearranges the groups themselves. The order you choose is kept.
+- The ⋮ menu of a room card **moves it to another group**, **adds it to another group**, **removes it from this group** or **from all groups**. Rooms in no group are listed at the bottom.
+- **Edit group** has an ID (set when the group is created, never changed), a name, an icon, the rooms (chips, with **Add a room**), aliases and a *level* (stored, not used by anything yet). Aliases are other names for your own templates and scripts: they appear in the service and the attributes below; Assist does not read them.
+- **Temperature and humidity.** For each, choose *No sensor*, *One sensor* (among those of the rooms of the group), *Average of all the sensors of the rooms* or *Average of a selection*. Diagnostic and configuration entities are never offered, and the dialog shows each source with its value. "All" is looked up every time, so a sensor moved to or from one of these rooms is followed automatically. A group with a sensor gets a `sensor` entity (for example `sensor.home_structure_night_temperature`) with the attributes `group`, `mode`, `area_ids`, `sources` and `used_sources`. A source that is unavailable, not a number or absurd (a humidity above 100 %) is ignored rather than counted as zero; Fahrenheit and Kelvin sources are converted. If a room leaves a group, the sensors that are no longer in the group's rooms are taken out of its settings and the panel tells you.
+- A group can be empty, and deleting a group never touches its rooms.
+
+Use the rooms of a group wherever Home Assistant takes an area, by reading the list from the service:
+
+```yaml
+actions:
+  - action: home_structure.get_groups
+    response_variable: result
+  - action: light.turn_off
+    target:
+      area_id: "{{ (result.groups | selectattr('id', 'eq', 'night') | first).area_ids }}"
+```
+
+Whether a device can act on areas depends on the device and its integration (a vacuum that cleans by room, for instance, depends on what its integration offers); Home Structure only supplies the list of areas.
+
+Labels of Home Assistant also give several memberships and can be targeted, but they apply to anything. Groups only hold rooms, are arranged like floors, and can give a temperature and a humidity for the whole group.
+
 ## What you get
 
 - **One sensor per separation**, for example `sensor.home_structure_living_room_building_hall_door`, with the state `open`, `closed` or `partial` (unknown when it cannot be read) and the attributes `type`, `space_a`, `space_b`, `name_a`, `name_b`, `sensor` and `position`. Use it in automations, templates and dashboards.
@@ -81,6 +108,8 @@ layout:   # positions on the editor plan, to draw it
   "area:living_room": {x: 24, y: 24}
   "area:hall": {x: 248, y: 24}
 ```
+
+- **A service** `home_structure.get_groups`, which returns the groups of rooms: `id`, `name`, `level`, `icon`, `aliases`, `area_ids`, `areas` (id and name) and, for `temperature` and `humidity`, the `mode`, the `entities` chosen and the `entity_id` of the group sensor (null without one).
 
 For an integration, reading the structure goes through this service and the `entity_id` of each separation: nothing to import, nothing to install beyond Home Structure.
 
@@ -115,7 +144,7 @@ English is the reference. French is included. To add a language, see [CONTRIBUTI
 
 ## Status
 
-Version 0.6, tested (backend and panel test suites run on every commit) and used with Sound Recognition. The home is described in the **Home Structure** panel of the sidebar (a plan you arrange, with autosave and undo); the *Configure* menus of the integration remain as a fallback. Feedback and issues are welcome.
+Version 0.7, tested (backend and panel test suites run on every commit) and used with Sound Recognition. The home is described in the **Home Structure** panel of the sidebar (a plan you arrange, with autosave and undo); the *Configure* menus of the integration remain as a fallback. Groups of rooms are in the **Groups** tab. Feedback and issues are welcome.
 
 ## Licence
 

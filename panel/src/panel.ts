@@ -1,5 +1,6 @@
 import { LitElement, css, html, nothing, svg } from "lit";
 import { property, state } from "lit/decorators.js";
+import "./groups";
 import { translator } from "./i18n";
 import type { Key, T } from "./i18n";
 import { BOX_H, BOX_W, autoLayout, clone, connOf, newId, nextFree, placedSpaces, sepState, shutterState, slug, trayAreas } from "./logic";
@@ -23,6 +24,7 @@ class HomeStructurePanel extends LitElement {
   @state() private cands: Candidates | null = null;
   @state() private listMode: boolean | null = null;
   @state() private failed = false;
+  @state() private tab: "plan" | "groups" = "plan";
   private chain: Promise<unknown> = Promise.resolve();
   private candFor = "";
 
@@ -481,23 +483,28 @@ class HomeStructurePanel extends LitElement {
     if (this.failed) return html`<p class="msg">${t("notLoaded")}</p>`;
     if (!this.boot) return html`<p class="msg">${t("loading")}</p>`;
     const list = this.listMode ?? this.narrow;
+    const plan = this.tab === "plan";
     return html`
       <div class="bar">
         ${this.narrow ? html`<button class="menu" @click=${() => this.dispatchEvent(new CustomEvent("hass-toggle-menu", { bubbles: true, composed: true }))} aria-label="Menu">☰</button>` : nothing}
         <h1>${t("title")}</h1>
-        <span class="status ${this.status}" role="status" data-status=${this.status}>${this.statusText()}</span>
+        <nav class="tabs" role="tablist">
+          <button role="tab" class="tab ${plan ? "on" : ""}" aria-selected=${plan} data-tab="plan" @click=${() => (this.tab = "plan")}>${t("tabPlan")}</button>
+          <button role="tab" class="tab ${plan ? "" : "on"}" aria-selected=${!plan} data-tab="groups" @click=${() => (this.tab = "groups")}>${t("tabGroups")}</button>
+        </nav>
+        ${plan ? html`<span class="status ${this.status}" role="status" data-status=${this.status}>${this.statusText()}</span>
         <span class="grow"></span>
         <button class="barbtn" data-action="undo" ?disabled=${!this.history.length} @click=${this.undo}>↶ ${t("undo")}</button>
         <button class="barbtn" data-action="reorganize" @click=${this.reorganize}>${t("reorganize")}</button>
         <button class="barbtn" data-action="add-zone" @click=${() => (this.zoneForm = { kind: "garden", name: this.kindLabel("garden"), in_home: this.boot!.in_home.garden ?? true })}>${t("addZone")}</button>
-        <button class="barbtn" data-action="toggle-view" @click=${() => (this.listMode = !list)}>${list ? t("plan") : t("list")}</button>
+        <button class="barbtn" data-action="toggle-view" @click=${() => (this.listMode = !list)}>${list ? t("plan") : t("list")}</button>` : nothing}
       </div>
-      ${this.renderZoneForm()}
+      ${plan ? html`${this.renderZoneForm()}
       <div class="cols ${list ? "list" : ""}">
         ${this.renderTray()}
         <main>${list ? this.renderList() : this.renderPlan()}</main>
         ${this.renderDrawer()}
-      </div>`;
+      </div>` : html`<home-structure-groups .hass=${this.hass}></home-structure-groups>`}`;
   }
 
   static styles = css`
@@ -506,6 +513,7 @@ class HomeStructurePanel extends LitElement {
     h1 { font-size: 1.25rem; font-weight: 400; margin: 0; }
     .menu { background: none; border: 0; color: inherit; font-size: 1.4rem; cursor: pointer; padding: 8px; }
     .grow { flex: 1; }
+    .tabs { display: flex; gap: 4px; margin-left: 12px; } .tab { font: inherit; color: inherit; background: none; border: 0; border-bottom: 3px solid transparent; padding: 8px 12px; cursor: pointer; opacity: .75; } .tab.on { border-bottom-color: currentColor; opacity: 1; font-weight: 500; }
     .status { font-size: .85rem; opacity: .9; margin-left: 8px; } .status.error { font-weight: 600; }
     .barbtn { font: inherit; color: inherit; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.35); border-radius: 6px; padding: 5px 12px; cursor: pointer; }
     .barbtn:disabled { opacity: .45; cursor: default; }
