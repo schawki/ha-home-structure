@@ -242,3 +242,25 @@ async def test_editing_groups_never_reloads_the_integration(hass, hass_ws_client
         reload2.assert_not_called()
     assert hass.states.get(separation).last_updated == started                      # the separation sensors were never touched
     assert entry.state.value == "loaded"
+
+
+async def test_get_describes_each_area_for_the_cards(hass, hass_ws_client, home):
+    await setup(hass)
+    reg = ar.async_get(hass)
+    reg.async_update(home["Bedroom"], icon="mdi:bed")
+    entry = MockConfigEntry(domain="test")
+    entry.add_to_hass(hass)
+    devices, entities = dr.async_get(hass), er.async_get(hass)
+    lamp = devices.async_get_or_create(config_entry_id=entry.entry_id, identifiers={("test", "lamp")})
+    cloud = devices.async_get_or_create(config_entry_id=entry.entry_id, identifiers={("test", "cloud")}, entry_type=dr.DeviceEntryType.SERVICE)
+    for dev in (lamp, cloud):
+        devices.async_update_device(dev.id, area_id=home["Bedroom"])
+    part = entities.async_get_or_create("sensor", "test", "of_lamp", device_id=lamp.id)       # through the device: not counted on its own
+    lone = entities.async_get_or_create("sensor", "test", "lone")
+    entities.async_update_entity(lone.entity_id, area_id=home["Bedroom"])
+    off = entities.async_get_or_create("sensor", "test", "off", disabled_by=er.RegistryEntryDisabler.USER)
+    entities.async_update_entity(off.entity_id, area_id=home["Bedroom"])
+    areas = {a["id"]: a for a in (await call(await hass_ws_client(hass), "get"))["result"]["areas"]}
+    bedroom = areas[home["Bedroom"]]
+    assert (bedroom["icon"], bedroom["devices"], bedroom["services"], bedroom["entities"]) == ("mdi:bed", 1, 1, 1)
+    assert areas[home["Kids"]]["icon"] is None and (areas[home["Kids"]]["devices"], areas[home["Kids"]]["services"], areas[home["Kids"]]["entities"]) == (0, 0, 0)

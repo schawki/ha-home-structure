@@ -32,7 +32,7 @@ def ws_get(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg:
         connection.send_error(msg["id"], "not_loaded", "Home Structure is not set up")
         return
     connection.send_result(msg["id"], {
-        "areas": structure.areas(hass), "options": _options(entry), "kinds": ZONE_KINDS, "types": SEPARATION_TYPES,
+        "areas": structure.area_details(hass), "options": _options(entry), "kinds": ZONE_KINDS, "types": SEPARATION_TYPES,
         "in_home": ZONE_IN_HOME, "permanent": PERMANENT, "sensor_domains": SENSOR_DOMAINS, "shutter_hosts": SHUTTER_HOSTS, "room_types": ROOM_TYPES, "room_type_groups": ROOM_TYPE_GROUPS,
         "group_modes": list(groups_mod.MODES),
     })

@@ -54,7 +54,7 @@ with sync_playwright() as p:
     pg.screenshot(path=os.path.join(SHOTS, "plan.png"))
     pg.close()
     pg = b.new_page(viewport={"width": 1100, "height": 640})
-    pg.goto(base + "?groups=1")
+    pg.goto(base + "?groups=1&dark=1")
     pg.wait_for_function(f"{P}?.querySelector('.bar')")
     q("[data-tab=groups]").click()
     pg.wait_for_selector("css=home-structure-panel >> home-structure-groups >> [data-group=nuit]")

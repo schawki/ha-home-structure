@@ -1,4 +1,4 @@
-export interface Area { id: string; name: string; floor: string | null }
+export interface Area { id: string; name: string; floor: string | null; icon?: string | null; devices?: number; services?: number; entities?: number }
 export interface Sep { id: string; type: string; sensor?: string; shutter?: string }
 export interface Conn { id: string; a: string; b: string; separations: Sep[] }
 export interface Zone { id: string; kind: string; in_home: boolean; name?: string }

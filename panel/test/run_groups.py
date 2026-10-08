@@ -61,14 +61,18 @@ with sync_playwright() as p:
 
     # ---- create a group with rooms, aliases, sensors
     q(pg, "[data-action=add-group]").click()
-    ok(n(pg, ".dialog") == 1 and q(pg, "input.gid").is_disabled(), "the dialog opens with a disabled ID")
+    ok(n(pg, ".dialog") == 1 and n(pg, "input.gid") == 0 and q(pg, ".gid").inner_text() == "", "the dialog opens with the ID shown as text, empty until there is a name")
     ok(q(pg, "[data-action=dialog-save]").is_disabled(), "Save waits for a name")
     q(pg, "input.gname").fill("Night part")
-    ok(q(pg, "input.gid").input_value() == "night_part", "the ID follows the name")
+    ok(q(pg, ".gid").inner_text() == "night_part", "the ID follows the name")
     q(pg, "input.glevel").fill("1"); q(pg, "input.gicon").fill("mdi:bed")
-    q(pg, "select.addroom").select_option("chambre"); q(pg, "select.addroom").select_option("bureau")
+    q(pg, "[data-action=room-picker]").click(); q(pg, "[data-pick=chambre]").click()
+    q(pg, "[data-action=room-picker]").click(); q(pg, "[data-pick=bureau]").click()
     ok(n(pg, "[data-field=rooms] .chip") == 2 and "Chambre" in q(pg, "[data-field=rooms]").inner_text(), "rooms are added as chips")
-    ok(n(pg, "select.addroom option[value=chambre]") == 0, "a room already chosen is no longer offered")
+    q(pg, "[data-action=room-picker]").click()
+    ok(n(pg, "[data-pick=chambre]") == 0 and n(pg, "[data-pick=salon]") == 1, "a room already chosen is no longer offered")
+    q(pg, ".scrim").click()
+    q(pg, "[data-action=alias-open]").click()
     q(pg, "input.alias").fill("Nuit"); q(pg, "input.alias").press("Enter"); q(pg, "input.alias").fill("Dodo")
     ok(n(pg, "[data-field=aliases] .chip") == 1, "Enter adds an alias")
     t = "[data-kind=temperature]"
@@ -98,7 +102,10 @@ with sync_playwright() as p:
     pg = new()
     ok(order(pg) == ["nuit", "jour", "vide"] and rooms(pg, "jour") == ["salon", "cuisine", "chambre"], "groups and rooms keep their order")
     ok(n(pg, "[data-group=vide] [data-room]") == 0 and n(pg, "[data-group=vide] .muted") >= 1, "an empty group says so")
-    ok("2 rooms" in q(pg, "[data-group=nuit] header").inner_text() and "3 rooms" in q(pg, "[data-group=jour] header").inner_text(), "room counts")
+    cap = lambda r: q(pg, f"[data-group=jour] [data-room={r}] small").inner_text()
+    ok(cap("salon") == "31 devices and 7 entities" and cap("cuisine") == "8 devices and 3 entities", "the caption counts devices and entities like the Areas page")
+    ok(q(pg, "[data-group=nuit] [data-room=bureau] small").inner_text() == "1 device" and q(pg, "[data-group=''] [data-room=entree] small").inner_text() == "8 devices, 1 service and 3 entities", "singular, and the list reads naturally")
+    ok(q(pg, "[data-group=''] [data-room=cave] small").count() == 0, "a room with nothing in it has no caption")
     ok(rooms(pg, "") == ["entree", "cave"], "rooms of no group")
     pg.screenshot(path=f"{OUT}/g3-groups.png")
 
@@ -184,11 +191,11 @@ with sync_playwright() as p:
 
     # ---- edit
     q(pg, "[data-group=nuit] [data-action=group-menu]").click(); q(pg, ".menu [data-action=edit-group]").click()
-    ok(q(pg, "input.gname").input_value() == "Night" and q(pg, "input.gid").input_value() == "nuit" and q(pg, "input.gicon").input_value() == "mdi:bed", "the dialog shows the group")
+    ok(q(pg, "input.gname").input_value() == "Night" and q(pg, ".gid").inner_text() == "nuit" and q(pg, "input.gicon").input_value() == "mdi:bed", "the dialog shows the group")
     ok(n(pg, "[data-field=aliases] .chip") == 1, "aliases are listed")
     q(pg, "input.gname").fill("Day"); ok(q(pg, "[data-action=dialog-save]").is_disabled(), "a name used by another group is refused")
     q(pg, "input.gname").fill("Night time")
-    ok(q(pg, "input.gid").input_value() == "nuit", "the ID never changes")
+    ok(q(pg, ".gid").inner_text() == "nuit", "the ID never changes")
     q(pg, "[data-field=aliases] [data-alias=Nuit] .chipx").click()
     q(pg, "[data-field=rooms] .chip >> nth=0 >> .chipx").click()
     q(pg, "[data-action=dialog-save]").click(); settle(pg)
@@ -225,9 +232,20 @@ with sync_playwright() as p:
     ok("nope" in q(pg, ".status").inner_text() and "salon" in rooms(pg, "jour"), "a failed save is shown and the page reloads the saved groups")
     pg.close()
 
+    # ---- dark theme screenshots
+    pg = new("?groups=1&dark=1", w=1300, h=800)
+    pg.screenshot(path=f"{OUT}/g8-dark.png")
+    q(pg, "[data-group=nuit] [data-action=group-menu]").click(); pg.screenshot(path=f"{OUT}/g9-dark-menu.png"); q(pg, ".menu [data-action=edit-group]").click()
+    q(pg, "[data-action=alias-open]").click()
+    pg.screenshot(path=f"{OUT}/g10-dark-dialog.png")
+    pg.evaluate("document.querySelector('home-structure-panel').shadowRoot.querySelector('home-structure-groups').shadowRoot.querySelector('.dialog').scrollIntoView(false)")
+    q(pg, "[data-kind=temperature] select.mode").select_option("all")
+    q(pg, ".dialog").evaluate("e => e.parentElement.scrollTo(0, 9999)"); pg.screenshot(path=f"{OUT}/g11-dark-dialog2.png")
+    pg.close()
+
     # ---- French, narrow
     pg = new("?groups=1&lang=fr", w=420, h=800)
-    ok("Groupes de pièces" in q(pg, "h1").inner_text() and "2 pièces" in q(pg, "[data-group=nuit] header").inner_text(), "French strings")
+    ok("Ajouter" in q(pg, ".fab").inner_text() and "45 appareils et 4 entités" in q(pg, "[data-group=nuit] [data-room=chambre]").inner_text(), "French strings")
     ok(pg.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"), "no horizontal scroll at phone width")
     pg.screenshot(path=f"{OUT}/g4-narrow-fr.png")
     q(pg, "[data-action=add-group]").click()

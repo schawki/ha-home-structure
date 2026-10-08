@@ -16,6 +16,23 @@ def areas(hass: HomeAssistant) -> list[dict]:
                   key=lambda a: a["name"].casefold())
 
 
+def area_details(hass: HomeAssistant) -> list[dict]:
+    """The areas of `areas()` plus what the Groups page shows on a room's card: its icon and what it holds, counted as Home Assistant's Areas page does.
+
+    `devices` are the devices of the area (`services` counts those that are services, not included in `devices`), `entities` the entities placed in
+    the area by themselves (not through a device of that area)."""
+    devices, entities = dr.async_get(hass), er.async_get(hass)
+    registry = {a.id: a for a in ar.async_get(hass).async_list_areas()}
+    device_area = {d.id: d.area_id for d in devices.devices.values()}
+    out = []
+    for a in areas(hass):
+        mine = [d for d in devices.devices.values() if d.area_id == a["id"]]
+        services = sum(1 for d in mine if d.entry_type is dr.DeviceEntryType.SERVICE)
+        alone = sum(1 for e in entities.entities.values() if e.area_id == a["id"] and not e.disabled and device_area.get(e.device_id) != a["id"])
+        out.append({**a, "icon": registry[a["id"]].icon, "devices": len(mine) - services, "services": services, "entities": alone})
+    return out
+
+
 OPENING_CLASSES = {"door", "window", "garage_door", "opening"}   # not "lock": an unlocked door is not an open one
 
 
