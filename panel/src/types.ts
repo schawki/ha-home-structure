@@ -1,5 +1,5 @@
 export interface Area { id: string; name: string; floor: string | null; icon?: string | null; devices?: number; services?: number; entities?: number }
-export interface Sep { id: string; type: string; sensor?: string; shutter?: string }
+export interface Sep { id: string; type: string; sensor?: string; shutter?: string; lock?: string; passage?: string }
 export interface Conn { id: string; a: string; b: string; separations: Sep[] }
 export interface Zone { id: string; kind: string; in_home: boolean; name?: string }
 export interface Pos { x: number; y: number }
@@ -9,9 +9,9 @@ export interface SensorCfg { mode: SensorMode; entities: string[] }
 export interface Group { id: string; name: string; level: number | null; icon: string | null; areas: string[]; aliases: string[]; temperature: SensorCfg; humidity: SensorCfg }
 export interface GroupSensor { entity_id: string; name: string; state: string; unit: string; area_id: string; area: string }
 export interface Options { zones: Zone[]; connections: Conn[]; excluded_areas: string[]; layout: Record<string, Pos>; room_types: Record<string, string>; groups?: Group[] }
-export interface Bootstrap { areas: Area[]; options: Options; kinds: string[]; types: string[]; in_home: Record<string, boolean>; room_type_groups: Record<string, string[]>; permanent: Record<string, string>; sensor_domains: string[]; shutter_hosts: string[]; room_types: string[] }
+export interface Bootstrap { areas: Area[]; options: Options; kinds: string[]; types: string[]; in_home: Record<string, boolean>; room_type_groups: Record<string, string[]>; permanent: Record<string, string>; sensor_domains: string[]; shutter_hosts: string[]; room_types: string[]; lock_hosts: string[]; passage_levels: string[]; passage_by_type: Record<string, string>; passage_ambiguous: string[] }
 export interface Sensor { entity_id: string; name: string; state: string }
-export interface Candidates { sensors: Sensor[]; filtered: boolean }
+export interface Candidates { sensors: Sensor[]; filtered: boolean; locks: Sensor[]; locks_filtered: boolean }
 export interface Space { id: string; name: string; kind: string; room_type: string | null; in_home: boolean; area: Area | null; zone: Zone | null; pos: Pos }
 export interface HassState { state: string; attributes: Record<string, unknown> }
 export interface Hass { language: string; states: Record<string, HassState>; callWS<T>(msg: Record<string, unknown>): Promise<T> }

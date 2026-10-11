@@ -219,6 +219,24 @@ class HomeStructurePanel extends LitElement {
       s.type = type;
       if (this.boot!.permanent[type]) delete s.sensor;
       if (!this.boot!.shutter_hosts.includes(type)) delete s.shutter;
+      if (!this.boot!.lock_hosts.includes(type)) delete s.lock;
+      delete s.passage;                       // a passage the user chose belongs to the type it was chosen for
+    });
+  }
+
+  private setSepLock(cid: string, sid: string, lock: string): void {
+    this.editConn(cid, (c) => {
+      const s = c.separations.find((x) => x.id === sid);
+      if (!s) return;
+      if (lock) s.lock = lock; else delete s.lock;
+    });
+  }
+
+  private setSepPassage(cid: string, sid: string, level: string): void {
+    this.editConn(cid, (c) => {
+      const s = c.separations.find((x) => x.id === sid);
+      if (!s) return;
+      if (level === this.boot!.passage_by_type[s.type]) delete s.passage; else s.passage = level;     // the default is not stored: it follows the type
     });
   }
 
@@ -397,8 +415,10 @@ class HomeStructurePanel extends LitElement {
   private renderLinkDrawer(c: Conn) {
     void this.loadCandidates(c);
     const names = new Map(this.spaces().map((s) => [s.id, s.name]));
-    const typeOptions = this.boot!.types.map((v) => ({ value: v, label: this.t(`type_${v}` as Key) }));
+    const typeOptions = this.boot!.types.map((v) => ({ value: v, label: this.t((v === "grille" ? "type_grille_full" : `type_${v}`) as Key) }));
+    const levelOptions = this.boot!.passage_levels.map((v) => ({ value: v, label: this.t(`passage_${v}` as Key) }));
     const sensors = this.cands?.sensors ?? [];
+    const locks = this.cands?.locks ?? [];
     return html`<aside class="drawer" data-drawer="link">
       <header><h2>${names.get(c.a)} ↔ ${names.get(c.b)}</h2><button class="x" @click=${() => (this.selection = null)} aria-label=${this.t("close")}>×</button></header>
       <h3>${this.t("separations")}</h3>
@@ -409,12 +429,19 @@ class HomeStructurePanel extends LitElement {
         const covers = sensors.filter((x) => x.entity_id.startsWith("cover."));
         const shutterOpts = [{ value: "", label: this.t("noShutter") }, ...covers.map((x) => ({ value: x.entity_id, label: x.name }))];
         if (s.shutter && !covers.some((x) => x.entity_id === s.shutter)) shutterOpts.push({ value: s.shutter, label: s.shutter });
+        const lockOpts = [{ value: "", label: this.t("noLock") }, ...locks.map((x) => ({ value: x.entity_id, label: x.name }))];
+        if (s.lock && !locks.some((x) => x.entity_id === s.lock)) lockOpts.push({ value: s.lock, label: s.lock });
+        const level = s.passage ?? this.boot!.passage_by_type[s.type] ?? "none";
         return html`<div class="sep" data-sep=${s.id}>
           ${this.select(s.type, typeOptions, (v) => this.setSepType(c.id, s.id, v), "type")}
           ${permanent ? html`<small class="muted">${this.t("noSensorNeeded")}</small>`
             : html`${this.select(s.sensor ?? "", opts, (v) => this.setSepSensor(c.id, s.id, v), "sensor")}
               <small class="muted">${this.cands ? (this.cands.filtered ? this.t("sensorsHere") : this.t("sensorsAll")) : ""}</small>`}
           ${this.boot!.shutter_hosts.includes(s.type) ? html`${this.select(s.shutter ?? "", shutterOpts, (v) => this.setSepShutter(c.id, s.id, v), "shutter")}<small class="muted">${this.t("shutterHint")}</small>` : nothing}
+          ${this.boot!.lock_hosts.includes(s.type) ? html`${this.select(s.lock ?? "", lockOpts, (v) => this.setSepLock(c.id, s.id, v), "lock")}<small class="muted">${this.t("lockHint")}</small>` : nothing}
+          ${this.boot!.passage_ambiguous.includes(s.type)
+            ? html`${this.select(level, levelOptions, (v) => this.setSepPassage(c.id, s.id, v), "passage")}<small class="muted">${this.t("passageHint")}</small>`
+            : html`<small class="muted" data-passage=${level}>${this.t(`passageIs_${level}` as Key)}</small>`}
           <div class="row">${this.chip(s)}${c.separations.length > 1 ? html`<button class="plain danger" data-action="remove-sep" @click=${() => this.editConn(c.id, (x) => { x.separations = x.separations.filter((y) => y.id !== s.id); })}>${this.t("removeSep")}</button>` : nothing}</div>
         </div>`;
       })}

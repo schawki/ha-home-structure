@@ -41,7 +41,7 @@
     states: { "binary_sensor.porte": { state: "off", attributes: {} }, "cover.volet": { state: "open", attributes: { current_position: 40 } } },
     async callWS(msg) {
       S.calls.push(msg.type);
-      if (msg.type === "home_structure/get") return { areas, options: JSON.parse(JSON.stringify(S.options)), kinds, types: ["open_space", "opening", "door", "glass_door", "grille", "window", "shutter", "wall"], in_home: inHome, permanent: { open_space: "open", opening: "open", wall: "closed" }, sensor_domains: ["binary_sensor", "cover"], shutter_hosts: ["door", "glass_door", "window"], room_type_groups: RTG, room_types: Object.values(RTG).flat() };
+      if (msg.type === "home_structure/get") return { areas, options: JSON.parse(JSON.stringify(S.options)), kinds, types: ["open_space", "opening", "door", "glass_door", "grille", "window", "shutter", "wall"], in_home: inHome, permanent: { open_space: "open", opening: "open", wall: "closed" }, sensor_domains: ["binary_sensor", "cover"], shutter_hosts: ["door", "glass_door", "window"], lock_hosts: ["door", "glass_door", "grille"], passage_levels: ["none", "possible", "normal"], passage_by_type: { open_space: "normal", opening: "normal", door: "normal", glass_door: "normal", grille: "normal", window: "possible", shutter: "possible", wall: "none" }, passage_ambiguous: ["grille", "window", "shutter"], room_type_groups: RTG, room_types: Object.values(RTG).flat() };
       if (msg.type === "home_structure/save") {
         if (S.fail === "save") throw { message: "boom" };
         S.options = JSON.parse(JSON.stringify(msg.options)); S.saves.push(S.options);
@@ -55,7 +55,7 @@
         return { groups, pruned: S.prune ? ["nuit"] : [], rebuilt: true };
       }
       if (msg.type === "home_structure/group_sensors") return { sensors: SENSORS[msg.kind].filter((s) => msg.area_ids.includes(s[0])).map((s) => ({ entity_id: s[1], name: s[2], state: s[3], unit: s[4], area_id: s[0], area: areas.find((a) => a.id === s[0]).name })) };
-      if (msg.type === "home_structure/candidates") return { sensors: [{ entity_id: "binary_sensor.porte", name: "Porte", state: "off" }, { entity_id: "cover.volet", name: "Volet", state: "open" }], filtered: true };
+      if (msg.type === "home_structure/candidates") return { sensors: [{ entity_id: "binary_sensor.porte", name: "Porte", state: "off" }, { entity_id: "cover.volet", name: "Volet", state: "open" }], filtered: true, locks: [{ entity_id: "lock.porte", name: "Serrure", state: "locked" }], locks_filtered: true };
       throw new Error("unknown " + msg.type);
     },
   };
