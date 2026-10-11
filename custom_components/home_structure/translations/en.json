@@ -179,7 +179,10 @@
       "invalid_separation": "A separation is invalid.",
       "sensor_not_needed": "An open space, an opening and a wall have no sensor.",
       "invalid_shutter": "A shutter can only be set on a door, a glass door or a window, and it must be a cover.",
-      "invalid_room_type": "A room type is invalid, or given to something that is not an ordinary room."
+      "invalid_room_type": "A room type is invalid, or given to something that is not an ordinary room.",
+      "invalid_lock": "A lock can only be set on a door, a glass door or a grille, and it must be a lock entity.",
+      "passage_not_needed": "Only a grille, a window or a shutter has a passage setting.",
+      "invalid_passage": "A passage must be none, possible or normal."
     }
   },
   "selector": {
@@ -204,10 +207,16 @@
         "opening": "opening",
         "door": "door",
         "glass_door": "glass door",
-        "grille": "security grille",
+        "grille": "security grille or mesh door",
         "window": "window",
         "shutter": "shutter",
         "wall": "wall"
+      }
+    },
+    "adjacency_level": {
+      "options": {
+        "normal": "Everyday routes",
+        "possible": "Everyday and possible routes"
       }
     }
   },
@@ -293,6 +302,16 @@
     "get_groups": {
       "name": "Get groups",
       "description": "Returns the groups of rooms: their rooms (area ids), aliases and the sensors that give their temperature and humidity."
+    },
+    "get_adjacency": {
+      "name": "Get adjacency",
+      "description": "Returns, for each area, the areas a person can go to from it (doors, openings, open spaces), in both directions. Useful to an integration that follows movement between rooms.",
+      "fields": {
+        "level": {
+          "name": "Level",
+          "description": "The lowest passage that counts: everyday routes only (default), or also the ways through that are not everyday, such as a window."
+        }
+      }
     }
   },
   "exceptions": {

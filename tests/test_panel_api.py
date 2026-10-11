@@ -122,3 +122,51 @@ async def test_saving_room_types_does_not_rebuild_the_sensors(hass, hass_ws_clie
     assert hass.config_entries.async_get_entry(entry.entry_id).options["room_types"] == {living: "living_room", kitchen: "kitchen"}
     out = await hass.services.async_call(DOMAIN, "get_structure", {}, blocking=True, return_response=True)
     assert {s["name"]: s["room_type"] for s in out["spaces"]}["Living"] == "living_room"
+
+
+async def test_get_gives_the_passage_and_lock_vocabulary(hass, hass_ws_client, home):
+    await setup(hass)
+    r = (await call(await hass_ws_client(hass), "get"))["result"]
+    assert r["passage_levels"] == ["none", "possible", "normal"] and r["passage_ambiguous"] == ["grille", "window", "shutter"]
+    assert r["passage_by_type"]["wall"] == "none" and r["passage_by_type"]["window"] == "possible" and r["passage_by_type"]["door"] == "normal"
+    assert r["lock_hosts"] == ["door", "glass_door", "grille"]
+
+
+async def test_save_keeps_a_lock_and_a_passage_but_not_a_passage_that_is_the_default(hass, hass_ws_client, home):
+    entry = await setup(hass)
+    client = await hass_ws_client(hass)
+    living, kitchen = f"area:{home['Living']}", f"area:{home['Kitchen']}"
+    options = {"zones": [], "layout": {living: {"x": 0, "y": 0}, kitchen: {"x": 200, "y": 0}},
+               "connections": [{"id": "c1", "a": living, "b": kitchen, "separations": [{"id": "s1", "type": "door", "lock": "lock.porte"},
+                                                                                       {"id": "s2", "type": "window", "passage": "none"},
+                                                                                       {"id": "s3", "type": "window", "passage": "possible"}]}]}
+    r = await call(client, "save", options=options)
+    assert r["success"]
+    seps = hass.config_entries.async_get_entry(entry.entry_id).options["connections"][0]["separations"]
+    assert seps[0]["lock"] == "lock.porte" and seps[1]["passage"] == "none" and "passage" not in seps[2]     # the default follows the type
+
+
+async def test_save_refuses_a_lock_or_a_passage_that_does_not_belong(hass, hass_ws_client, home):
+    await setup(hass)
+    client = await hass_ws_client(hass)
+    living, kitchen = f"area:{home['Living']}", f"area:{home['Kitchen']}"
+    options = {"zones": [], "layout": {living: {"x": 0, "y": 0}, kitchen: {"x": 200, "y": 0}},
+               "connections": [{"id": "c1", "a": living, "b": kitchen, "separations": [{"id": "s1", "type": "wall", "lock": "lock.x"},
+                                                                                       {"id": "s2", "type": "door", "passage": "normal"},
+                                                                                       {"id": "s3", "type": "window", "passage": "maybe"}]}]}
+    r = await call(client, "save", options=options)
+    assert not r["success"] and r["error"]["code"] == "invalid"
+    assert all(code in r["error"]["message"] for code in ("invalid_lock", "passage_not_needed", "invalid_passage"))
+
+
+async def test_candidates_offer_the_locks_of_the_areas_or_every_lock(hass, hass_ws_client, home):
+    await setup(hass)
+    client = await hass_ws_client(hass)
+    reg = er.async_get(hass)
+    lock = reg.async_get_or_create("lock", "test", "front", suggested_object_id="front")
+    reg.async_update_entity(lock.entity_id, area_id=home["Living"])
+    hass.states.async_set(lock.entity_id, "locked", {"friendly_name": "Front lock"})
+    here = (await call(client, "candidates", area_ids=[home["Living"]]))["result"]
+    assert here["locks"] == [{"entity_id": lock.entity_id, "name": "Front lock", "state": "locked"}] and here["locks_filtered"] is True
+    elsewhere = (await call(client, "candidates", area_ids=[home["Kitchen"]]))["result"]
+    assert [x["entity_id"] for x in elsewhere["locks"]] == [lock.entity_id] and elsewhere["locks_filtered"] is False    # none in these areas: every lock is offered

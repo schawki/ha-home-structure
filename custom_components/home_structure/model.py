@@ -6,7 +6,11 @@ Data (stored in the options of the config entry):
     layout:      {space id: {x, y}}              where each space sits on the plan of the editor panel; a space without a position is not on the plan yet
     room_types:  {space id: type}               what an ordinary room is used for (bedroom, bathroom…), optional; only rooms have one
     zones:       [{id, kind, in_home, name?}]   spaces other than rooms; id is "zone:<slug>", or "area:<area id>" to give a kind to a Home Assistant area
-    connections: [{id, a, b, separations: [{id, type, sensor?, shutter?}]}]   a and b are space ids; two spaces with no connection are not adjacent
+    connections: [{id, a, b, separations: [{id, type, sensor?, shutter?, lock?, passage?}]}]   a and b are space ids; two spaces with no connection are not adjacent
+
+A connection is stored once and holds in both directions, so adjacency is always reciprocal.
+A separation may name a `lock` (door, glass door, grille) and, for the ambiguous types only (grille, window, shutter), a `passage` level that
+replaces the one the type gives. Nothing here depends on whether a door is open or locked: that is for the integrations that read the structure.
 
 A room is any Home Assistant area ("area:<area id>"); it needs no entry in `zones`.
 """
@@ -17,7 +21,8 @@ import unicodedata
 from collections.abc import Callable
 from typing import Any
 
-from .const import PERMANENT, ROOM_TYPES, SEPARATION_TYPES, SHUTTER_HOSTS, ZONE_IN_HOME, ZONE_KINDS
+from .const import (LOCK_HOSTS, PASSAGE_AMBIGUOUS, PASSAGE_BY_TYPE, PASSAGE_LEVELS, PASSAGE_NONE, PASSAGE_NORMAL, PASSAGE_POSSIBLE, PERMANENT, ROOM_TYPES,
+                    SEPARATION_TYPES, SHUTTER_HOSTS, ZONE_IN_HOME, ZONE_KINDS)
 
 StateReader = Callable[[str], "tuple[str, dict] | None"]
 
@@ -92,6 +97,13 @@ def validate(data: dict, area_ids: set[str]) -> list[str]:
                 errors.append("sensor_not_needed")
             if s.get("shutter") and (s.get("type") not in SHUTTER_HOSTS or not str(s["shutter"]).startswith("cover.")):
                 errors.append("invalid_shutter")
+            if s.get("lock") and (s.get("type") not in LOCK_HOSTS or not str(s["lock"]).startswith("lock.")):
+                errors.append("invalid_lock")
+            if s.get("passage") is not None:
+                if s.get("type") not in PASSAGE_AMBIGUOUS:
+                    errors.append("passage_not_needed")
+                elif s["passage"] not in PASSAGE_LEVELS:
+                    errors.append("invalid_passage")
     return sorted(set(errors))
 
 
@@ -127,6 +139,31 @@ def shutter_state(sep: dict, read: StateReader) -> tuple[str, int | None]:
     return normalize(got[0], got[1]) if got else ("unknown", None)
 
 
+def lock_state(sep: dict, read: StateReader) -> str:
+    """State of the lock of a separation as locked | unlocked | jammed | unknown ("unknown" when there is none or it cannot be read).
+
+    A latch pulled back (`open`) counts as unlocked: whether the door itself is open is for its opening sensor to say. `locking` and `unlocking`
+    last a few seconds and are unknown."""
+    got = read(sep["lock"]) if sep.get("lock") else None
+    state = got[0] if got else None
+    return {"locked": "locked", "unlocked": "unlocked", "open": "unlocked", "jammed": "jammed"}.get(state, "unknown")
+
+
+def passage(sep: dict) -> str:
+    """How far a person goes through a separation: none | possible | normal (see `const.PASSAGE_LEVELS`).
+
+    The type decides; for the ambiguous types (grille, window, shutter) the user's own `passage` replaces it."""
+    level = sep.get("passage")
+    if sep["type"] in PASSAGE_AMBIGUOUS and level in PASSAGE_LEVELS:
+        return level
+    return PASSAGE_BY_TYPE.get(sep["type"], PASSAGE_NONE)
+
+
+def connection_passage(separations: list[dict]) -> str:
+    """The highest passage among the separations of a connection: one door between two rooms is enough to go from one to the other."""
+    return max((passage(s) for s in separations), key=PASSAGE_LEVELS.index, default=PASSAGE_NONE)
+
+
 def build(data: dict, areas: list[dict], read: StateReader, entity_of: Callable[[str], str | None] = lambda _sid: None) -> dict:
     """The whole structure as the service returns it: spaces, and connections with the current state of each separation.
 
@@ -140,10 +177,32 @@ def build(data: dict, areas: list[dict], read: StateReader, entity_of: Callable[
             state, pos = separation_state(s, read)
             shutter = s.get("shutter")
             sh_state, sh_pos = shutter_state(s, read)
+            lock = s.get("lock")
             seps.append({"id": s["id"], "type": s["type"], "state": state, "position": pos, "sensor": s.get("sensor"), "entity_id": entity_of(s["id"]),
-                         "shutter": shutter, "shutter_state": sh_state if shutter else None, "shutter_position": sh_pos})
-        conns.append({"id": c["id"], "a": c["a"], "b": c["b"], "a_name": names.get(c["a"], c["a"]), "b_name": names.get(c["b"], c["b"]), "separations": seps})
+                         "shutter": shutter, "shutter_state": sh_state if shutter else None, "shutter_position": sh_pos,
+                         "passage": passage(s), "lock": lock, "lock_state": lock_state(s, read) if lock else None})
+        conns.append({"id": c["id"], "a": c["a"], "b": c["b"], "a_name": names.get(c["a"], c["a"]), "b_name": names.get(c["b"], c["b"]),
+                      "passage": connection_passage(c["separations"]), "separations": seps})
     return {"spaces": all_spaces, "connections": conns, "layout": {k: dict(v) for k, v in (data.get("layout") or {}).items()}}
+
+
+def adjacency(structure: dict, level: str = PASSAGE_NORMAL) -> dict[str, list[str]]:
+    """The Home Assistant areas a person can go to from each area: {area id: [area id]}, from a structure as `build` returns it.
+
+    `level` is the lowest passage that counts: "normal" (everyday routes, the default) or "possible" (also the ways through that are not
+    everyday, a window for example). A connection holds in both directions, so the result is symmetric. Spaces that are not Home Assistant
+    areas (street, neighbour…) are left out, and an area with no way through is there with an empty list."""
+    if level not in (PASSAGE_POSSIBLE, PASSAGE_NORMAL):
+        raise ValueError(level)
+    counted = PASSAGE_LEVELS[PASSAGE_LEVELS.index(level):]
+    out: dict[str, set[str]] = {s["area_id"]: set() for s in structure["spaces"] if s.get("area_id")}
+    for c in structure["connections"]:
+        if c["passage"] in counted and c["a"].startswith("area:") and c["b"].startswith("area:"):
+            a, b = c["a"][5:], c["b"][5:]
+            if a in out and b in out:
+                out[a].add(b)
+                out[b].add(a)
+    return {area: sorted(others) for area, others in sorted(out.items())}
 
 
 def neighbours(structure: dict, space_id: str) -> list[str]:
@@ -208,6 +267,14 @@ def apply_layout(data: dict, area_ids: set[str]) -> None:
     data["layout"] = {k: v for k, v in data["layout"].items() if k in known}
     zone_ids = {z["id"] for z in data["zones"]}
     data["room_types"] = {k: v for k, v in (data.get("room_types") or {}).items() if k in known and k not in zone_ids and v in ROOM_TYPES}   # only rooms have one
+
+
+def drop_default_passage(data: dict) -> None:
+    """Removes a `passage` that is just what the type gives, so that the separation keeps following the type if its default ever changes."""
+    for c in data.get("connections", []):
+        for s in c.get("separations", []):
+            if s.get("type") in PASSAGE_AMBIGUOUS and s.get("passage") == PASSAGE_BY_TYPE[s["type"]]:
+                del s["passage"]
 
 
 def structural(data: dict) -> dict:

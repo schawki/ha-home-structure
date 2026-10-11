@@ -1,2 +1,13 @@
 get_structure:
 get_groups:
+get_adjacency:
+  fields:
+    level:
+      required: false
+      default: normal
+      selector:
+        select:
+          options:
+            - normal
+            - possible
+          translation_key: adjacency_level

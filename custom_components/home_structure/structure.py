@@ -86,6 +86,32 @@ def all_sensors(hass: HomeAssistant) -> list[dict]:
         (*hass.states.async_all("binary_sensor"), *hass.states.async_all("cover")), key=lambda s: s.name.casefold())]
 
 
+def lock_candidates(hass: HomeAssistant, area_ids: list[str]) -> list[dict]:
+    """Lock entities that sit in the given areas (on the entity itself or on its device), for the editor panel; each is {entity_id, name, state}."""
+    entities, devices = er.async_get(hass), dr.async_get(hass)
+    wanted, out = set(area_ids), []
+    for e in entities.entities.values():
+        if e.domain != "lock" or e.disabled:
+            continue
+        device = devices.async_get(e.device_id) if e.device_id else None
+        if (e.area_id or (device.area_id if device else None)) not in wanted:
+            continue
+        st = hass.states.get(e.entity_id)
+        out.append({"entity_id": e.entity_id, "name": (st.name if st else None) or e.name or e.original_name or e.entity_id,
+                    "state": st.state if st else "unknown"})
+    return sorted(out, key=lambda s: s["name"].casefold())
+
+
+def all_locks(hass: HomeAssistant) -> list[dict]:
+    """Every lock (fallback when none is found in the two areas)."""
+    return [{"entity_id": s.entity_id, "name": s.name, "state": s.state} for s in sorted(hass.states.async_all("lock"), key=lambda s: s.name.casefold())]
+
+
+def adjacency(hass: HomeAssistant, entry: ConfigEntry, level: str) -> dict[str, list[str]]:
+    """The areas a person can go to from each area (see `model.adjacency`): what the service `get_adjacency` returns."""
+    return model.adjacency(current(hass, entry), level)
+
+
 def group_sensors(hass: HomeAssistant, area_ids: list[str], kind: str) -> list[dict]:
     """The temperature or humidity sensors of the given areas (on the entity itself or on its device), for the groups.
 

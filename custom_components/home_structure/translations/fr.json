@@ -179,7 +179,10 @@
       "invalid_separation": "Une séparation est invalide.",
       "sensor_not_needed": "Un espace ouvert, une ouverture et un mur n'ont pas de capteur.",
       "invalid_shutter": "Un volet ne peut être associé qu'à une porte, une porte vitrée ou une fenêtre, et doit être un volet roulant (cover).",
-      "invalid_room_type": "Un type de pièce est invalide, ou donné à autre chose qu'une pièce ordinaire."
+      "invalid_room_type": "Un type de pièce est invalide, ou donné à autre chose qu'une pièce ordinaire.",
+      "invalid_lock": "Une serrure ne peut être définie que sur une porte, une porte vitrée ou une grille, et ce doit être une entité serrure.",
+      "passage_not_needed": "Seuls une grille, une fenêtre ou un volet ont un réglage de passage.",
+      "invalid_passage": "Un passage doit être aucun, possible ou normal."
     }
   },
   "selector": {
@@ -208,6 +211,12 @@
         "window": "fenêtre",
         "shutter": "volet",
         "wall": "mur"
+      }
+    },
+    "adjacency_level": {
+      "options": {
+        "normal": "Trajets de tous les jours",
+        "possible": "Trajets de tous les jours et possibles"
       }
     }
   },
@@ -293,6 +302,16 @@
     "get_groups": {
       "name": "Obtenir les groupes",
       "description": "Renvoie les groupes de pièces : leurs pièces (identifiants de pièces), alias et les capteurs qui donnent leur température et leur humidité."
+    },
+    "get_adjacency": {
+      "name": "Obtenir l'adjacence",
+      "description": "Renvoie, pour chaque pièce, les pièces où l'on peut aller depuis elle (portes, ouvertures, espaces ouverts), dans les deux sens. Utile à une intégration qui suit les déplacements entre pièces.",
+      "fields": {
+        "level": {
+          "name": "Niveau",
+          "description": "Le passage minimal retenu : les trajets de tous les jours seulement (par défaut), ou aussi les passages exceptionnels, comme une fenêtre."
+        }
+      }
     }
   },
   "exceptions": {

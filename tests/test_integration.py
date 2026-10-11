@@ -3,6 +3,7 @@ import json
 import pathlib
 
 import pytest
+import voluptuous as vol
 from homeassistant.config_entries import SOURCE_USER
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import area_registry as ar, entity_registry as er
@@ -302,3 +303,38 @@ async def test_the_shutter_of_a_separation_is_an_attribute_and_is_followed(hass,
     out = await hass.services.async_call(DOMAIN, "get_structure", {}, blocking=True, return_response=True)
     seps = {x["id"]: x for c in out["connections"] for x in c["separations"]}
     assert seps["s"]["shutter"] == "cover.volet" and seps["s"]["shutter_state"] == "open"
+
+
+async def test_the_lock_and_the_passage_of_a_separation_are_attributes_and_the_lock_is_followed(hass, areas):
+    e, h = f"area:{areas['Entrée']}", f"area:{areas['Entrée (extérieur)']}"
+    hass.states.async_set("lock.porte", "locked")
+    entry = await make_entry(hass, {"zones": [{"id": h, "kind": "hall", "in_home": False}],
+                                    "connections": [{"id": "c", "a": e, "b": h, "separations": [{"id": "s", "type": "door", "lock": "lock.porte"},
+                                                                                              {"id": "w", "type": "window", "passage": "none"}]}]})
+    reg = er.async_get(hass)
+    door = reg.async_get_entity_id("sensor", DOMAIN, f"{entry.entry_id}_s")
+    attrs = hass.states.get(door).attributes
+    assert attrs["lock"] == "lock.porte" and attrs["lock_state"] == "locked" and attrs["passage"] == "normal"
+    hass.states.async_set("lock.porte", "unlocked")
+    await hass.async_block_till_done()
+    assert hass.states.get(door).attributes["lock_state"] == "unlocked"                    # followed live, like a shutter
+    window = hass.states.get(reg.async_get_entity_id("sensor", DOMAIN, f"{entry.entry_id}_w"))
+    assert window.attributes["passage"] == "none" and window.attributes["lock"] is None and window.attributes["lock_state"] is None
+    out = await hass.services.async_call(DOMAIN, "get_structure", {}, blocking=True, return_response=True)
+    seps = {x["id"]: x for c in out["connections"] for x in c["separations"]}
+    assert seps["s"]["lock"] == "lock.porte" and seps["s"]["lock_state"] == "unlocked" and seps["s"]["passage"] == "normal"
+    assert out["connections"][0]["passage"] == "normal"
+
+
+async def test_get_adjacency_answers_in_both_directions_and_by_level(hass, areas):
+    salon, entree, jardin, hall = (areas[n] for n in ("Salon", "Entrée", "Jardin", "Entrée (extérieur)"))
+    await make_entry(hass, {"zones": [], "connections": [
+        {"id": "c1", "a": f"area:{salon}", "b": f"area:{entree}", "separations": [{"id": "s1", "type": "door"}]},
+        {"id": "c2", "a": f"area:{salon}", "b": f"area:{jardin}", "separations": [{"id": "s2", "type": "window"}]},
+        {"id": "c3", "a": f"area:{entree}", "b": f"area:{hall}", "separations": [{"id": "s3", "type": "wall"}]}]})
+    everyday = await hass.services.async_call(DOMAIN, "get_adjacency", {}, blocking=True, return_response=True)
+    assert everyday == {"adjacency": {salon: [entree], entree: [salon], jardin: [], hall: []}}
+    possible = await hass.services.async_call(DOMAIN, "get_adjacency", {"level": "possible"}, blocking=True, return_response=True)
+    assert possible["adjacency"][salon] == sorted([entree, jardin]) and possible["adjacency"][jardin] == [salon] and possible["adjacency"][hall] == []
+    with pytest.raises(vol.Invalid):
+        await hass.services.async_call(DOMAIN, "get_adjacency", {"level": "none"}, blocking=True, return_response=True)

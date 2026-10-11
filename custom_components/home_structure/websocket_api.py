@@ -11,7 +11,8 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from . import groups as groups_mod, model, structure
-from .const import DOMAIN, GROUPS_CHANGED, PERMANENT, SENSOR_DOMAINS, ROOM_TYPES, ROOM_TYPE_GROUPS, SEPARATION_TYPES, SHUTTER_HOSTS, ZONE_IN_HOME, ZONE_KINDS
+from .const import (DOMAIN, GROUPS_CHANGED, LOCK_HOSTS, PASSAGE_AMBIGUOUS, PASSAGE_BY_TYPE, PASSAGE_LEVELS, PERMANENT, SENSOR_DOMAINS, ROOM_TYPES, ROOM_TYPE_GROUPS,
+                    SEPARATION_TYPES, SHUTTER_HOSTS, ZONE_IN_HOME, ZONE_KINDS)
 
 
 def _entry(hass: HomeAssistant) -> ConfigEntry | None:
@@ -34,7 +35,8 @@ def ws_get(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg:
     connection.send_result(msg["id"], {
         "areas": structure.area_details(hass), "options": _options(entry), "kinds": ZONE_KINDS, "types": SEPARATION_TYPES,
         "in_home": ZONE_IN_HOME, "permanent": PERMANENT, "sensor_domains": SENSOR_DOMAINS, "shutter_hosts": SHUTTER_HOSTS, "room_types": ROOM_TYPES, "room_type_groups": ROOM_TYPE_GROUPS,
-        "group_modes": list(groups_mod.MODES),
+        "group_modes": list(groups_mod.MODES), "lock_hosts": LOCK_HOSTS,
+        "passage_levels": PASSAGE_LEVELS, "passage_by_type": PASSAGE_BY_TYPE, "passage_ambiguous": PASSAGE_AMBIGUOUS,
     })
 
 
@@ -51,6 +53,7 @@ async def ws_save(hass: HomeAssistant, connection: websocket_api.ActiveConnectio
     data["groups"] = copy.deepcopy(entry.options.get("groups", []))        # the groups have their own command: a plan saved late never overwrites them
     area_ids = {a["id"] for a in structure.areas(hass)}
     model.apply_layout(data, area_ids)
+    model.drop_default_passage(data)
     errors = model.validate(data, area_ids)
     if errors:
         connection.send_error(msg["id"], "invalid", ", ".join(errors))
@@ -66,9 +69,11 @@ async def ws_save(hass: HomeAssistant, connection: websocket_api.ActiveConnectio
 @websocket_api.require_admin
 @callback
 def ws_candidates(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
-    """Door, window and cover entities of the areas; every such entity of the home when there is none (the editor says which)."""
+    """Door, window and cover entities of the areas, and the locks; every such entity of the home when there is none (the editor says which)."""
     found = structure.sensor_candidates(hass, msg["area_ids"])
-    connection.send_result(msg["id"], {"sensors": found or structure.all_sensors(hass), "filtered": bool(found)})
+    locks = structure.lock_candidates(hass, msg["area_ids"])
+    connection.send_result(msg["id"], {"sensors": found or structure.all_sensors(hass), "filtered": bool(found),
+                                       "locks": locks or structure.all_locks(hass), "locks_filtered": bool(locks)})
 
 
 @websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/save_groups", vol.Required("groups"): [dict]})

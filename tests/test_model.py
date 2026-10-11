@@ -58,7 +58,8 @@ def test_build_reads_states_and_fixed_types():
     out = model.build(DATA, AREAS, states.get, {"s1": "sensor.a"}.get)
     c = {c["id"]: c for c in out["connections"]}
     assert c["c1"]["separations"][0] == {"id": "s1", "type": "open_space", "state": "open", "position": None, "sensor": None, "entity_id": "sensor.a",
-                                            "shutter": None, "shutter_state": None, "shutter_position": None}
+                                            "shutter": None, "shutter_state": None, "shutter_position": None,
+                                            "passage": "normal", "lock": None, "lock_state": None}
     s2, s3 = c["c2"]["separations"]
     assert (s2["state"], s3["state"]) == ("open", "closed")                                  # door open, plain wall: adjacent, no passage
     glass, shutter = c["c3"]["separations"]
@@ -144,3 +145,90 @@ def test_every_room_type_is_valid_and_the_released_ones_stay():
     assert released <= set(ROOM_TYPES) and len(ROOM_TYPES) == len(set(ROOM_TYPES)) == sum(len(g) for g in ROOM_TYPE_GROUPS.values())
     for t in ROOM_TYPES:
         assert model.validate({**DATA, "room_types": {"area:salon": t}}, {"salon", "entree", "jardin", "hall"}) == []
+
+
+# ------------------------------------------------------------------------------------------------ passage, lock, adjacency
+@pytest.mark.parametrize("sep,expected", [
+    ({"type": "open_space"}, "normal"), ({"type": "opening"}, "normal"), ({"type": "door"}, "normal"), ({"type": "glass_door"}, "normal"),
+    ({"type": "grille"}, "normal"), ({"type": "window"}, "possible"), ({"type": "shutter"}, "possible"), ({"type": "wall"}, "none"),
+    # the user decides for the ambiguous types only
+    ({"type": "window", "passage": "none"}, "none"), ({"type": "window", "passage": "normal"}, "normal"), ({"type": "grille", "passage": "none"}, "none"),
+    ({"type": "shutter", "passage": "normal"}, "normal"),
+    # anywhere else a stray value changes nothing (the validation refuses it before it is stored)
+    ({"type": "wall", "passage": "normal"}, "none"), ({"type": "door", "passage": "none"}, "normal"), ({"type": "window", "passage": "teleport"}, "possible"),
+])
+def test_passage_follows_the_type_and_the_user_decides_only_for_the_ambiguous_ones(sep, expected):
+    assert model.passage(sep) == expected
+
+
+def test_a_connection_has_the_highest_passage_of_its_separations_and_a_closed_door_is_still_a_passage():
+    assert model.connection_passage([{"type": "wall"}, {"type": "window"}]) == "possible"
+    assert model.connection_passage([{"type": "window"}, {"type": "door", "sensor": "binary_sensor.porte"}]) == "normal"
+    assert model.connection_passage([{"type": "wall"}]) == "none" and model.connection_passage([]) == "none"
+    out = model.build(DATA, AREAS, {"binary_sensor.porte": ("off", {})}.get)            # the door is closed: still a normal passage
+    c = {c["id"]: c for c in out["connections"]}
+    assert c["c2"]["separations"][0]["state"] == "closed" and c["c2"]["separations"][0]["passage"] == "normal" and c["c2"]["passage"] == "normal"
+    assert c["c2"]["separations"][1]["passage"] == "none"
+
+
+def _data(*seps, a="area:salon", b="area:jardin"):
+    return {"zones": [], "connections": [{"id": "c", "a": a, "b": b, "separations": [{"id": f"s{i}", **s} for i, s in enumerate(seps)]}]}
+
+
+@pytest.mark.parametrize("sep,errors", [
+    ({"type": "door", "lock": "lock.porte"}, []), ({"type": "glass_door", "lock": "lock.baie"}, []), ({"type": "grille", "lock": "lock.grille"}, []),
+    ({"type": "window", "lock": "lock.f"}, ["invalid_lock"]), ({"type": "wall", "lock": "lock.m"}, ["invalid_lock"]), ({"type": "shutter", "lock": "lock.v"}, ["invalid_lock"]),
+    ({"type": "door", "lock": "switch.porte"}, ["invalid_lock"]),
+    ({"type": "window", "passage": "none"}, []), ({"type": "grille", "passage": "possible"}, []), ({"type": "shutter", "passage": "normal"}, []),
+    ({"type": "window", "passage": "maybe"}, ["invalid_passage"]), ({"type": "window", "passage": ""}, ["invalid_passage"]),
+    ({"type": "door", "passage": "normal"}, ["passage_not_needed"]), ({"type": "wall", "passage": "none"}, ["passage_not_needed"]),
+])
+def test_validate_lock_and_passage(sep, errors):
+    assert model.validate(_data(sep), {"salon", "jardin"}) == errors
+
+
+@pytest.mark.parametrize("state,expected", [
+    ("locked", "locked"), ("unlocked", "unlocked"), ("jammed", "jammed"),
+    ("open", "unlocked"),                                           # the latch is pulled back: whether the door is open is for its opening sensor to say
+    ("locking", "unknown"), ("unlocking", "unknown"), ("opening", "unknown"), ("unavailable", "unknown"), ("unknown", "unknown"), ("weird", "unknown"), (None, "unknown"),
+])
+def test_lock_state(state, expected):
+    states = {"lock.porte": (state, {})} if state is not None else {}
+    assert model.lock_state({"lock": "lock.porte"}, states.get) == expected
+    assert model.lock_state({}, states.get) == "unknown"                                  # no lock
+
+
+def test_build_reports_the_lock_and_the_passage_of_each_separation():
+    data = _data({"type": "door", "sensor": "binary_sensor.porte", "lock": "lock.porte"}, {"type": "window", "passage": "none"}, {"type": "wall"})
+    out = model.build(data, AREAS, {"lock.porte": ("locked", {}), "binary_sensor.porte": ("off", {})}.get)
+    door, window, wall = out["connections"][0]["separations"]
+    assert (door["lock"], door["lock_state"], door["passage"], door["state"]) == ("lock.porte", "locked", "normal", "closed")
+    assert (window["lock"], window["lock_state"], window["passage"]) == (None, None, "none")
+    assert wall["passage"] == "none" and out["connections"][0]["passage"] == "normal"
+
+
+def test_drop_default_passage_keeps_only_what_differs_from_the_type():
+    data = _data({"type": "window", "passage": "possible"}, {"type": "window", "passage": "none"}, {"type": "grille", "passage": "normal"}, {"type": "grille", "passage": "possible"})
+    model.drop_default_passage(data)
+    assert [s.get("passage") for s in data["connections"][0]["separations"]] == [None, "none", None, "possible"]
+
+
+def test_adjacency_lists_the_areas_a_person_can_go_to_in_both_directions():
+    out = model.build(DATA, AREAS, {}.get)
+    assert model.adjacency(out) == {"entree": ["hall", "salon"], "hall": ["entree"], "jardin": ["salon"], "salon": ["entree", "jardin"]}
+    for area, others in model.adjacency(out).items():                                      # reciprocity: one connection serves both directions
+        assert all(area in model.adjacency(out)[o] for o in others)
+
+
+def test_adjacency_levels_zones_and_isolated_areas():
+    data = {"zones": [{"id": "area:jardin", "kind": "garden", "in_home": True}, {"id": "zone:rue", "name": "Rue", "kind": "street", "in_home": False}],
+            "connections": [
+                {"id": "c1", "a": "area:salon", "b": "area:entree", "separations": [{"id": "s1", "type": "door"}]},
+                {"id": "c2", "a": "area:salon", "b": "area:jardin", "separations": [{"id": "s2", "type": "window"}]},         # possible, not everyday
+                {"id": "c3", "a": "area:entree", "b": "area:jardin", "separations": [{"id": "s3", "type": "wall"}]},          # adjacent, no passage
+                {"id": "c4", "a": "zone:rue", "b": "area:jardin", "separations": [{"id": "s4", "type": "door"}]}]}           # not an area
+    out = model.build(data, AREAS, {}.get)
+    assert model.adjacency(out) == {"entree": ["salon"], "hall": [], "jardin": [], "salon": ["entree"]}
+    assert model.adjacency(out, "possible") == {"entree": ["salon"], "hall": [], "jardin": ["salon"], "salon": ["entree", "jardin"]}
+    with pytest.raises(ValueError):
+        model.adjacency(out, "none")

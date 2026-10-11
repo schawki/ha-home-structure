@@ -16,6 +16,20 @@ SEPARATION_TYPES = [OPEN_SPACE, OPENING, DOOR, GLASS_DOOR, GRILLE, WINDOW, SHUTT
 PERMANENT = {OPEN_SPACE: "open", OPENING: "open", WALL: "closed"}   # types whose state never changes
 SENSOR_DOMAINS = ["binary_sensor", "cover"]
 SHUTTER_HOSTS = [DOOR, GLASS_DOOR, WINDOW]   # separations that can have a roller shutter or blind in front of them (a cover entity)
+LOCK_HOSTS = [DOOR, GLASS_DOOR, GRILLE]      # separations that can have a lock (a `lock` entity)
+LOCK_STATES = ["locked", "unlocked", "jammed"]   # a lock that cannot be read is "unknown"
+
+# Can a person go through a separation? Three levels, ordered from the lowest to the highest:
+#   none      nobody goes through (a wall)
+#   possible  it can be done but it is not an everyday route (climbing through a window)
+#   normal    people go through it in everyday life (a door, an opening, an open space)
+# The type decides. Only the ambiguous types let the user choose, because the same type means different things from one home to another.
+# The level never depends on a state: a closed door is still a normal passage, what a closed or locked door means is for the consumer to decide.
+PASSAGE_NONE, PASSAGE_POSSIBLE, PASSAGE_NORMAL = "none", "possible", "normal"
+PASSAGE_LEVELS = [PASSAGE_NONE, PASSAGE_POSSIBLE, PASSAGE_NORMAL]
+PASSAGE_BY_TYPE = {OPEN_SPACE: PASSAGE_NORMAL, OPENING: PASSAGE_NORMAL, DOOR: PASSAGE_NORMAL, GLASS_DOOR: PASSAGE_NORMAL, GRILLE: PASSAGE_NORMAL,
+                   WINDOW: PASSAGE_POSSIBLE, SHUTTER: PASSAGE_POSSIBLE, WALL: PASSAGE_NONE}
+PASSAGE_AMBIGUOUS = [GRILLE, WINDOW, SHUTTER]   # types whose passage the user can set (a grille is a mesh door or bars, a shutter a roller door or a window cover)
 
 # Spaces other than rooms. A zone can be inside the home (garden, balcony) or outside it (street, building hall, neighbour).
 ZONE_KINDS = ["garden", "balcony", "terrace", "courtyard", "garage", "hall", "stairwell", "common_area", "street", "neighbor", "other"]
