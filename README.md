@@ -33,12 +33,14 @@ Requires Home Assistant 2025.8 or later and your rooms defined as areas.
   | `opening` | a passage with no door | always open |
   | `door` | a door | from its sensor |
   | `glass_door` | glass or sliding door | from its sensor |
-  | `grille` | security grille or mesh door: a physical barrier that hardly stops sound | from its sensor if it has one |
-  | `window` | a window | from its sensor |
-  | `shutter` | roller shutter or blind | from its cover |
+  | `grille` | security grille or mesh door: a physical barrier that hardly stops sound; you say whether people can pass | from its sensor if it has one |
+  | `window` | a window (people can use it in an emergency or to break in, so you say whether it counts as a passage) | from its sensor |
+  | `shutter` | roller shutter or blind (same choice as a window) | from its cover |
   | `wall` | a plain wall: adjacent, no passage | always closed |
 
   A door and a glass door between the same two spaces are two separations of one connection.
+- **Passage.** Each separation says whether a person can go through it: `normal` (open space, opening, door, glass door, grille), `possible` (window, shutter: only in an emergency or by force) or `none` (wall). Passage describes the type, never the current state: a closed or locked door is still `normal`. For the three ambiguous types (`grille`, `window`, `shutter`) the editor lets you change the level. A connection's passage is the highest of its separations.
+- **Locks.** A door, glass door or grille can name a `lock` entity, separate from its opening sensor (a bolt that is open does not mean the door is open). The attribute `lock_state` is `locked`, `unlocked`, `jammed` or `unknown`.
 - **Sensors.** A separation that can change may have a `binary_sensor` (door or window contact) or a `cover` (shutter). Its state becomes `open`, `closed`, `partial` (a cover between 1 and 99 %, or moving) or `unknown` (no sensor, or it does not answer).
 - **A shutter in front of a window or a door.** A door, glass door or window can also name the `cover` of the roller shutter or blind in front of it (the `shutter` field). The separation keeps its own state and reports the shutter next to it in the attributes `shutter`, `shutter_state` and `shutter_position`, so a consumer can combine the two. Use the separate `shutter` type only for a shutter that is the whole separation.
 
@@ -83,7 +85,7 @@ Labels of Home Assistant also give several memberships and can be targeted, but 
 
 ## What you get
 
-- **One sensor per separation**, for example `sensor.home_structure_living_room_building_hall_door`, with the state `open`, `closed` or `partial` (unknown when it cannot be read) and the attributes `type`, `space_a`, `space_b`, `name_a`, `name_b`, `sensor` and `position`. Use it in automations, templates and dashboards.
+- **One sensor per separation**, for example `sensor.home_structure_living_room_building_hall_door`, with the state `open`, `closed` or `partial` (unknown when it cannot be read) and the attributes `type`, `space_a`, `space_b`, `name_a`, `name_b`, `sensor`, `position`, `passage`, `lock` and `lock_state`. Use it in automations, templates and dashboards.
 - **A service** `home_structure.get_structure`, which returns the whole structure with current states, for integrations:
 
 ```yaml
@@ -103,12 +105,30 @@ connections:
     a_name: Living room
     b_name: Building hall
     separations:
-      - {id: 7be41d90, type: door, state: open, position: null, sensor: binary_sensor.hall_door, entity_id: sensor.home_structure_living_room_building_hall_door, shutter: null, shutter_state: null, shutter_position: null}
+      - {id: 7be41d90, type: door, state: open, position: null, sensor: binary_sensor.hall_door, entity_id: sensor.home_structure_living_room_building_hall_door, shutter: null, shutter_state: null, shutter_position: null, passage: normal, lock: null, lock_state: null}
+    passage: normal
 layout:   # positions on the editor plan, to draw it
   "area:living_room": {x: 24, y: 24}
   "area:hall": {x: 248, y: 24}
 ```
 
+- **A service** `home_structure.get_adjacency`, which returns which areas are next to which, as a plain list per area, for integrations that want adjacent areas (for instance to copy them into another integration's settings):
+
+```yaml
+action: home_structure.get_adjacency
+data:
+  level: normal   # or "possible" to include windows and shutters
+response_variable: adjacency
+```
+
+```yaml
+adjacency:
+  living_room: [hall, kitchen]
+  hall: [living_room]
+  bedroom: []
+```
+
+  Only areas appear (zones such as the street are left out), the relation is symmetric, and an area with no neighbour has an empty list. It is read-only: Home Structure does not write into other integrations' settings, and none reads it automatically yet, so copy the lists by hand where needed. The panel (not the options flow) manages shutters, locks and passage levels.
 - **A service** `home_structure.get_groups`, which returns the groups of rooms: `id`, `name`, `level`, `icon`, `aliases`, `area_ids`, `areas` (id and name) and, for `temperature` and `humidity`, the `mode`, the `entities` chosen and the `entity_id` of the group sensor (null without one).
 
 For an integration, reading the structure goes through this service and the `entity_id` of each separation: nothing to import, nothing to install beyond Home Structure.

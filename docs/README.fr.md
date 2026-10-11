@@ -33,12 +33,14 @@ Nécessite Home Assistant 2025.8 ou plus récent et vos pièces définies comme 
   | `opening` (ouverture) | un passage sans porte | toujours ouvert |
   | `door` (porte) | une porte | selon son capteur |
   | `glass_door` (porte vitrée) | porte vitrée ou coulissante | selon son capteur |
-  | `grille` (grille / porte grillagée) | grille de sécurité ou porte grillagée : une barrière physique qui n'arrête presque pas le son | selon son capteur s'il y en a un |
-  | `window` (fenêtre) | une fenêtre | selon son capteur |
-  | `shutter` (volet) | volet roulant ou store | selon son volet (cover) |
+  | `grille` (grille / porte grillagée) | grille de sécurité ou porte grillagée : une barrière physique qui n'arrête presque pas le son ; vous dites si on peut passer | selon son capteur s'il y en a un |
+  | `window` (fenêtre) | une fenêtre (on peut s'en servir en urgence ou pour s'introduire : vous dites si elle compte comme un passage) | selon son capteur |
+  | `shutter` (volet) | volet roulant ou store (même choix qu'une fenêtre) | selon son volet (cover) |
   | `wall` (mur) | un mur plein : adjacent, sans passage | toujours fermé |
 
   Une porte et une porte vitrée entre les deux mêmes espaces sont deux séparations d'une seule liaison.
+- **Passage.** Chaque séparation dit si une personne peut la traverser : `normal` (espace ouvert, ouverture, porte, porte vitrée, grille), `possible` (fenêtre, volet : seulement en urgence ou par effraction) ou `none` (mur). Le passage décrit le type, jamais l'état du moment : une porte fermée ou verrouillée reste `normal`. Pour les trois types ambigus (`grille`, `window`, `shutter`), l'éditeur permet de changer le niveau. Le passage d'une liaison est le plus élevé de ses séparations.
+- **Serrures.** Une porte, une porte vitrée ou une grille peut indiquer une entité `lock`, distincte de son capteur d'ouverture (un pêne ouvert ne veut pas dire que la porte est ouverte). L'attribut `lock_state` vaut `locked`, `unlocked`, `jammed` ou `unknown`.
 - **Capteurs.** Une séparation qui peut changer peut avoir un `binary_sensor` (contact de porte ou de fenêtre) ou un `cover` (volet). Son état devient `open`, `closed`, `partial` (un volet entre 1 et 99 %, ou en mouvement) ou `unknown` (pas de capteur, ou il ne répond pas).
 - **Un volet devant une fenêtre ou une porte.** Une porte, une porte vitrée ou une fenêtre peut aussi indiquer le `cover` du volet roulant ou du store placé devant elle (champ `shutter`). La séparation garde son propre état et signale le volet à côté, dans les attributs `shutter`, `shutter_state` et `shutter_position` : un consommateur peut combiner les deux. Le type `shutter` seul ne sert que pour un volet qui est toute la séparation.
 
@@ -83,8 +85,9 @@ Les étiquettes de Home Assistant donnent aussi plusieurs appartenances et peuve
 
 ## Ce que vous obtenez
 
-- **Un capteur par séparation**, avec l'état ouvert, fermé ou partiel (inconnu quand il ne peut pas être lu) et les attributs `type`, `space_a`, `space_b`, `name_a`, `name_b`, `sensor` et `position`. Utilisable dans les automatisations, les modèles et les tableaux de bord.
+- **Un capteur par séparation**, avec l'état ouvert, fermé ou partiel (inconnu quand il ne peut pas être lu) et les attributs `type`, `space_a`, `space_b`, `name_a`, `name_b`, `sensor`, `position`, `passage`, `lock` et `lock_state`. Utilisable dans les automatisations, les modèles et les tableaux de bord.
 - **Un service** `home_structure.get_structure`, qui renvoie toute la structure avec les états actuels, pour les intégrations (exemple complet de la réponse dans le [README anglais](../README.md)).
+- **Un service** `home_structure.get_adjacency`, qui renvoie quelles pièces sont voisines, en une simple liste par pièce, pour les intégrations qui veulent des pièces adjacentes (par exemple pour les recopier dans les réglages d'une autre intégration) : paramètre optionnel `level` (`normal`, ou `possible` pour inclure fenêtres et volets). Seules les pièces apparaissent (pas les zones comme la rue), la relation est symétrique, une pièce sans voisine a une liste vide. C'est en lecture seule : Home Structure n'écrit pas dans les réglages d'une autre intégration et aucune ne le lit encore automatiquement, donc recopiez les listes à la main si besoin. Les volets, serrures et niveaux de passage se gèrent dans le panneau (pas dans le flux d'options).
 - **Un service** `home_structure.get_groups`, qui renvoie les groupes de pièces : `id`, `name`, `level`, `icon`, `aliases`, `area_ids`, `areas` (id et nom) et, pour `temperature` et `humidity`, le `mode`, les `entities` choisies et l'`entity_id` du capteur du groupe (nul sans capteur).
 
 ## Dans une automatisation
