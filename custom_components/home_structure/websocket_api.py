@@ -11,7 +11,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from . import groups as groups_mod, model, structure
-from .const import (DOMAIN, GROUPS_CHANGED, LOCK_HOSTS, PASSAGE_AMBIGUOUS, PASSAGE_BY_TYPE, PASSAGE_LEVELS, PERMANENT, SENSOR_DOMAINS, ROOM_TYPES, ROOM_TYPE_GROUPS,
+from .const import (DOMAIN, EVENT_CHANGED, GROUPS_CHANGED, REASON_SAVED_GROUPS, REASON_SAVED_STRUCTURE, LOCK_HOSTS, PASSAGE_AMBIGUOUS, PASSAGE_BY_TYPE, PASSAGE_LEVELS, PERMANENT, SENSOR_DOMAINS, ROOM_TYPES, ROOM_TYPE_GROUPS,
                     SEPARATION_TYPES, SHUTTER_HOSTS, ZONE_IN_HOME, ZONE_KINDS)
 
 
@@ -59,9 +59,12 @@ async def ws_save(hass: HomeAssistant, connection: websocket_api.ActiveConnectio
         connection.send_error(msg["id"], "invalid", ", ".join(errors))
         return
     rebuild = model.structural(data) != model.structural(_options(entry))
+    changed = data != _options(entry)
     hass.config_entries.async_update_entry(entry, options=data)
     if rebuild:
         hass.config_entries.async_schedule_reload(entry.entry_id)
+    if changed:
+        hass.bus.async_fire(EVENT_CHANGED, {"reason": REASON_SAVED_STRUCTURE})      # consumers read the services again
     connection.send_result(msg["id"], {"options": data, "rebuilt": rebuild})
 
 
@@ -106,6 +109,7 @@ async def ws_save_groups(hass: HomeAssistant, connection: websocket_api.ActiveCo
         connection.send_error(msg["id"], "invalid", ", ".join(errors))
         return
     hass.config_entries.async_update_entry(entry, options={**_options(entry), "groups": groups})
+    hass.bus.async_fire(EVENT_CHANGED, {"reason": REASON_SAVED_GROUPS})
     async_dispatcher_send(hass, GROUPS_CHANGED.format(entry.entry_id))                       # the group sensors follow on the spot: no reload
     connection.send_result(msg["id"], {"groups": groups, "pruned": pruned})
 

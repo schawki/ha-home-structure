@@ -90,6 +90,8 @@ Les étiquettes de Home Assistant donnent aussi plusieurs appartenances et peuve
 - **Un service** `home_structure.get_adjacency`, qui renvoie quelles pièces sont voisines, en une simple liste par pièce, pour les intégrations qui veulent des pièces adjacentes (par exemple pour les recopier dans les réglages d'une autre intégration) : paramètre optionnel `level` (`normal`, ou `possible` pour inclure fenêtres et volets). Seules les pièces apparaissent (pas les zones comme la rue), la relation est symétrique, une pièce sans voisine a une liste vide. C'est en lecture seule : Home Structure n'écrit pas dans les réglages d'une autre intégration et aucune ne le lit encore automatiquement, donc recopiez les listes à la main si besoin. Les volets, serrures et niveaux de passage se gèrent dans le panneau (pas dans le flux d'options).
 - **Un service** `home_structure.get_groups`, qui renvoie les groupes de pièces : `id`, `name`, `level`, `icon`, `aliases`, `area_ids`, `areas` (id et nom) et, pour `temperature` et `humidity`, le `mode`, les `entities` choisies et l'`entity_id` du capteur du groupe (nul sans capteur).
 
+- **Un événement** `home_structure_changed`, émis quand la structure ou les groupes sont enregistrés et quand l'intégration est chargée (y compris après un enregistrement dans le flux d'options). Il ne contient que `reason` (`saved_structure`, `saved_groups` ou `loaded`) : une intégration qui garde une copie de la structure l'écoute, puis rappelle `get_structure`, `get_groups` ou `get_adjacency`.
+
 ## Dans une automatisation
 
 Chaque séparation est un capteur : l'état d'une porte entre deux pièces est disponible comme n'importe quelle entité :

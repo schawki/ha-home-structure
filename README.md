@@ -131,6 +131,8 @@ adjacency:
   Only areas appear (zones such as the street are left out), the relation is symmetric, and an area with no neighbour has an empty list. It is read-only: Home Structure does not write into other integrations' settings, and none reads it automatically yet, so copy the lists by hand where needed. The panel (not the options flow) manages shutters, locks and passage levels.
 - **A service** `home_structure.get_groups`, which returns the groups of rooms: `id`, `name`, `level`, `icon`, `aliases`, `area_ids`, `areas` (id and name) and, for `temperature` and `humidity`, the `mode`, the `entities` chosen and the `entity_id` of the group sensor (null without one).
 
+- **An event** `home_structure_changed`, fired when the structure or the groups are saved and when the integration is loaded (this includes a save made in the options flow). It carries only `reason` (`saved_structure`, `saved_groups` or `loaded`): an integration that keeps a copy of the structure listens to it and calls `get_structure`, `get_groups` or `get_adjacency` again.
+
 For an integration, reading the structure goes through this service and the `entity_id` of each separation: nothing to import, nothing to install beyond Home Structure.
 
 ## Using it in an automation

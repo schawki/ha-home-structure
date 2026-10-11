@@ -15,7 +15,7 @@ from homeassistant.components import frontend, panel_custom
 from homeassistant.components.http import StaticPathConfig
 
 from . import structure, websocket_api as panel_ws
-from .const import DOMAIN, PLATFORMS
+from .const import DOMAIN, EVENT_CHANGED, PLATFORMS, REASON_LOADED
 
 SERVICE_GET_STRUCTURE = "get_structure"
 SERVICE_GET_GROUPS = "get_groups"
@@ -71,6 +71,7 @@ async def _async_register_panel(hass: HomeAssistant) -> None:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await _async_register_panel(hass)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    hass.bus.async_fire(EVENT_CHANGED, {"reason": REASON_LOADED})      # includes the reload that follows a save in the options flow
     return True
 
 

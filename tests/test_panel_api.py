@@ -1,4 +1,6 @@
 """WebSocket commands of the editor panel."""
+import copy
+
 import pytest
 from homeassistant.helpers import area_registry as ar, entity_registry as er, floor_registry as fr
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -170,3 +172,28 @@ async def test_candidates_offer_the_locks_of_the_areas_or_every_lock(hass, hass_
     assert here["locks"] == [{"entity_id": lock.entity_id, "name": "Front lock", "state": "locked"}] and here["locks_filtered"] is True
     elsewhere = (await call(client, "candidates", area_ids=[home["Kitchen"]]))["result"]
     assert [x["entity_id"] for x in elsewhere["locks"]] == [lock.entity_id] and elsewhere["locks_filtered"] is False    # none in these areas: every lock is offered
+
+
+async def test_the_changed_event_tells_consumers_to_read_again(hass, hass_ws_client, home):
+    from homeassistant.core import callback
+    seen = []
+    hass.bus.async_listen("home_structure_changed", callback(lambda e: seen.append(dict(e.data))))
+    entry = await setup(hass)
+    await hass.async_block_till_done()
+    assert seen == [{"reason": "loaded"}]                                   # nothing but the reason: consumers call the services
+    seen.clear()
+    client = await hass_ws_client(hass)
+    living, kitchen = f"area:{home['Living']}", f"area:{home['Kitchen']}"
+    options = {"zones": [], "layout": {living: {"x": 0, "y": 0}, kitchen: {"x": 200, "y": 0}},
+               "connections": [{"id": "c1", "a": living, "b": kitchen, "separations": [{"id": "s1", "type": "door"}]}]}
+    assert (await call(client, "save", options=options))["success"]
+    await hass.async_block_till_done()
+    assert {"reason": "saved_structure"} in seen
+    seen.clear()
+    assert (await call(client, "save", options=copy.deepcopy(dict(hass.config_entries.async_get_entry(entry.entry_id).options))))["success"]
+    await hass.async_block_till_done()
+    assert {"reason": "saved_structure"} not in seen                        # saving the same thing is not a change
+    seen.clear()
+    assert (await call(client, "save_groups", groups=[{"id": "", "name": "Day", "level": 0, "icon": None, "aliases": [], "areas": [home["Living"]]}]))["success"]
+    await hass.async_block_till_done()
+    assert seen == [{"reason": "saved_groups"}]

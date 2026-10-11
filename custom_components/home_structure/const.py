@@ -1,6 +1,8 @@
 """Constants and vocabulary of Home Structure."""
 DOMAIN = "home_structure"
 PLATFORMS = ["sensor"]
+EVENT_CHANGED = DOMAIN + "_changed"      # bus event: the structure or the groups were saved, or the integration was loaded. Carries only `reason`; consumers call the services to read
+REASON_SAVED_STRUCTURE, REASON_SAVED_GROUPS, REASON_LOADED = "saved_structure", "saved_groups", "loaded"
 GROUPS_CHANGED = DOMAIN + "_groups_changed_{}"      # dispatcher signal (per config entry id): the groups were saved, the group sensors follow
 
 # What separates two adjacent spaces. The vocabulary is fixed so that every integration reading the structure speaks the same language.
