@@ -22,6 +22,7 @@ SERVICE_GET_GROUPS = "get_groups"
 SERVICE_GET_ADJACENCY = "get_adjacency"
 SERVICE_GET_OCCUPANTS = "get_occupants"
 SERVICE_GET_ROOM_SENSORS = "get_room_sensors"
+SERVICE_GET_ROOM_ENTITIES = "get_room_entities"
 CONFIG_SCHEMA = vol.Schema({DOMAIN: vol.Schema({})}, extra=vol.ALLOW_EXTRA)
 
 
@@ -56,6 +57,13 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             raise ServiceValidationError(translation_domain=DOMAIN, translation_key="not_loaded")
         return await structure.room_sensors_view(hass, entries[0])
 
+    async def get_room_entities(call: ServiceCall) -> dict:
+        entries = [e for e in hass.config_entries.async_entries(DOMAIN) if e.state is ConfigEntryState.LOADED]
+        if not entries:
+            raise ServiceValidationError(translation_domain=DOMAIN, translation_key="not_loaded")
+        return structure.room_entities_view(hass, entries[0], call.data.get("domains"))
+
+    hass.services.async_register(DOMAIN, SERVICE_GET_ROOM_ENTITIES, get_room_entities, schema=vol.Schema({vol.Optional("domains"): [str]}), supports_response=SupportsResponse.ONLY)
     hass.services.async_register(DOMAIN, SERVICE_GET_ROOM_SENSORS, get_room_sensors, supports_response=SupportsResponse.ONLY)
     hass.services.async_register(DOMAIN, SERVICE_GET_STRUCTURE, get_structure, supports_response=SupportsResponse.ONLY)
     hass.services.async_register(DOMAIN, SERVICE_GET_OCCUPANTS, get_occupants, supports_response=SupportsResponse.ONLY)

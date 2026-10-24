@@ -5,7 +5,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar, device_registry as dr, entity_registry as er, floor_registry as fr
 
-from . import groups as groups_mod, model, room_sensors
+from . import groups as groups_mod, model, room_entities, room_sensors
 from .const import DOMAIN
 
 
@@ -134,6 +134,11 @@ async def room_sensors_view(hass: HomeAssistant, entry: ConfigEntry) -> dict:
     for sp in spaces:
         sp["occupants"] = [u for u in sp["occupants"] if u in ids]       # a deleted user is not an occupant
     return room_sensors.view(hass, spaces, await room_sensors.matter_bridges(hass), entry.options.get("sensor_order") or {})
+
+
+def room_entities_view(hass: HomeAssistant, entry: ConfigEntry, domains: list[str] | None) -> dict:
+    """The entities of the rooms by type (lights, media players…): what the service `get_room_entities` returns."""
+    return room_entities.view(hass, model.spaces(entry.options, areas(hass)), domains)
 
 
 def adjacency(hass: HomeAssistant, entry: ConfigEntry, level: str) -> dict[str, list[str]]:

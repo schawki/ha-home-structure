@@ -312,6 +312,16 @@
       "name": "Get room sensors",
       "description": "Returns, for each room, its sensors and binary sensors grouped by type (the one exposed to Assist comes first), with what is exposed to Assist, HomeKit and Matter, plus the sensors that are in no room."
     },
+    "get_room_entities": {
+      "name": "Get room entities",
+      "description": "Returns, for each room, its entities by type (lights, media players, switches, climate…) and the entities that are in no room. Sensors and binary sensors are left out unless you name them; they have their own service.",
+      "fields": {
+        "domains": {
+          "name": "Types",
+          "description": "Only these types of entities, for example media_player and light. Leave empty for every type except sensors and binary sensors."
+        }
+      }
+    },
     "get_adjacency": {
       "name": "Get adjacency",
       "description": "Returns, for each area, the areas a person can go to from it (doors, openings, open spaces), in both directions. Useful to an integration that follows movement between rooms.",

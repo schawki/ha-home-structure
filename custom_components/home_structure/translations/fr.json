@@ -312,6 +312,16 @@
       "name": "Obtenir les capteurs des pièces",
       "description": "Renvoie, pour chaque pièce, ses capteurs et capteurs binaires regroupés par type (celui exposé à Assist en premier), avec ce qui est exposé à Assist, HomeKit et Matter, ainsi que les capteurs qui ne sont dans aucune pièce."
     },
+    "get_room_entities": {
+      "name": "Obtenir les entités des pièces",
+      "description": "Renvoie, pour chaque pièce, ses entités par type (lumières, lecteurs multimédia, interrupteurs, climatisation…) et les entités qui ne sont dans aucune pièce. Les capteurs et capteurs binaires sont exclus sauf si vous les nommez ; ils ont leur propre service.",
+      "fields": {
+        "domains": {
+          "name": "Types",
+          "description": "Seulement ces types d'entités, par exemple media_player et light. Laissez vide pour tous les types sauf les capteurs et capteurs binaires."
+        }
+      }
+    },
     "get_adjacency": {
       "name": "Obtenir l'adjacence",
       "description": "Renvoie, pour chaque pièce, les pièces où l'on peut aller depuis elle (portes, ouvertures, espaces ouverts), dans les deux sens. Utile à une intégration qui suit les déplacements entre pièces.",

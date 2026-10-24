@@ -76,3 +76,34 @@ async def test_service_lists_rooms_types_and_loose_sensors(hass, home):
     assert [s["entity_id"] for s in view["unassigned"]] == ["binary_sensor.loose_motion"]
     assert "sensor.thermo_diag" not in str(view)                           # diagnostic entities are left out
     assert view["matter"] == {"available": False, "bridges": []} and view["homekit"] == []
+
+
+async def test_room_entities_by_type_with_their_room_and_the_exclusions(hass):
+    from homeassistant.const import EntityCategory
+    areas, devices, ents = ar.async_get(hass), dr.async_get(hass), er.async_get(hass)
+    salon, cuisine = areas.async_create("Salon").id, areas.async_create("Cuisine").id
+    cfg = MockConfigEntry(domain="test")
+    cfg.add_to_hass(hass)
+    dev = devices.async_get_or_create(config_entry_id=cfg.entry_id, identifiers={("test", "tv")}, name="TV")
+    devices.async_update_device(dev.id, area_id=salon)
+    ents.async_get_or_create("media_player", "test", "tv", device_id=dev.id, suggested_object_id="tv")
+    ents.async_get_or_create("light", "test", "l1", suggested_object_id="lamp")
+    ents.async_update_entity("light.lamp", area_id=cuisine)
+    ents.async_get_or_create("light", "test", "l2", suggested_object_id="loose_light")
+    ents.async_get_or_create("switch", "test", "s1", entity_category=EntityCategory.CONFIG, suggested_object_id="tv_setting")
+    ents.async_get_or_create("sensor", "test", "x", suggested_object_id="temp")
+    entry = MockConfigEntry(domain=DOMAIN, data={}, title="Home Structure", options={"zones": [], "connections": [], "layout": {f"area:{salon}": {"x": 0, "y": 0}, f"area:{cuisine}": {"x": 1, "y": 0}}})
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    view = await hass.services.async_call(DOMAIN, "get_room_entities", {}, blocking=True, return_response=True)
+    room = {r["area_id"]: r for r in view["rooms"]}
+    assert [e["entity_id"] for e in room[salon]["entities"]["media_player"]] == ["media_player.tv"]                  # through its device
+    assert room[salon]["entities"]["media_player"][0]["device_name"] == "TV" and "domain" not in room[salon]["entities"]["media_player"][0]
+    assert [e["entity_id"] for e in room[cuisine]["entities"]["light"]] == ["light.lamp"]                              # its own room
+    assert [e["entity_id"] for e in view["unassigned"]["light"]] == ["light.loose_light"]
+    assert "switch" not in str(view) and "sensor" not in str(view)                                                    # configuration entities and sensors are left out
+    only = await hass.services.async_call(DOMAIN, "get_room_entities", {"domains": ["LIGHT"]}, blocking=True, return_response=True)
+    assert set(room_domains := {d for r in only["rooms"] for d in r["entities"]}) == {"light"}
+    both = await hass.services.async_call(DOMAIN, "get_room_entities", {"domains": ["sensor", "media_player"]}, blocking=True, return_response=True)
+    assert {d for r in both["rooms"] for d in r["entities"]} | set(both["unassigned"]) == {"sensor", "media_player"}

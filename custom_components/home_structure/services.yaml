@@ -2,6 +2,13 @@ get_structure:
 get_groups:
 get_occupants:
 get_room_sensors:
+get_room_entities:
+  fields:
+    domains:
+      required: false
+      selector:
+        text:
+          multiple: true
 get_adjacency:
   fields:
     level:
