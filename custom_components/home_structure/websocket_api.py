@@ -123,7 +123,19 @@ def ws_group_sensors(hass: HomeAssistant, connection: websocket_api.ActiveConnec
     connection.send_result(msg["id"], {"sensors": structure.group_sensors(hass, msg["area_ids"], msg["kind"])})
 
 
-COMMANDS = (ws_get, ws_save, ws_candidates, ws_save_groups, ws_group_sensors)
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/room_sensors"})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_room_sensors(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    """The sensors of every room by type, with what is exposed to Assist, HomeKit and Matter (read only), for the Rooms page."""
+    entry = _entry(hass)
+    if entry is None:
+        connection.send_error(msg["id"], "not_loaded", "Home Structure is not set up")
+        return
+    connection.send_result(msg["id"], await structure.room_sensors_view(hass, entry))
+
+
+COMMANDS = (ws_get, ws_save, ws_candidates, ws_save_groups, ws_group_sensors, ws_room_sensors)
 
 
 def async_register(hass: HomeAssistant) -> None:

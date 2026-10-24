@@ -17,7 +17,7 @@
     connectedCallback() { this.render(); }
     render() { this.innerHTML = `<svg viewBox="0 0 24 24" style="width:var(--mdc-icon-size,24px);height:var(--mdc-icon-size,24px);fill:none;stroke:currentColor;stroke-width:1.6"><rect x="3" y="7" width="18" height="10" rx="3"/><path d="M6 17v2M18 17v2M6 7V5h12v2"/></svg>`; }
   });
-  const S = window.__s = { calls: [], saves: [], fail: q.get("fail") };
+  const S = window.__s = { calls: [], saves: [], fail: q.get("fail"), notFirst: !!q.get("notfirst"), noMatter: !!q.get("nomatter") };
   const areas = [
     { id: "salon", name: "Salon", floor: "RDC", icon: "mdi:sofa-outline", devices: 31, services: 0, entities: 7 }, { id: "cuisine", name: "Cuisine", floor: "RDC", icon: "mdi:fridge-outline", devices: 8, services: 0, entities: 3 },
     { id: "entree", name: "Entrée", floor: "RDC", icon: "mdi:door-closed", devices: 8, services: 1, entities: 3 },
@@ -42,6 +42,15 @@
     async callWS(msg) {
       S.calls.push(msg.type);
       if (msg.type === "home_structure/get") return { areas, users: S.users ?? [{ id: "u1", name: "Amal" }, { id: "u2", name: "Karim" }], options: JSON.parse(JSON.stringify(S.options)), kinds, types: ["open_space", "opening", "door", "glass_door", "grille", "window", "shutter", "wall"], in_home: inHome, permanent: { open_space: "open", opening: "open", wall: "closed" }, sensor_domains: ["binary_sensor", "cover"], shutter_hosts: ["door", "glass_door", "window"], lock_hosts: ["door", "glass_door", "grille"], passage_levels: ["none", "possible", "normal"], passage_by_type: { open_space: "normal", opening: "normal", door: "normal", glass_door: "normal", grille: "normal", window: "possible", shutter: "possible", wall: "none" }, passage_ambiguous: ["grille", "window", "shutter"], room_type_groups: RTG, room_types: Object.values(RTG).flat() };
+      if (msg.type === "home_structure/room_sensors") {
+        const sn = (id, name, cls, st, unit, assist, extra = {}) => ({ entity_id: id, name, state: st, unit, domain: "sensor", type: cls, area_id: null, device_id: null, device_name: null, assist, homekit: [], matter: [], ...extra });
+        return { rooms: [
+          { id: "area:salon", area_id: "salon", name: "Salon", kind: "room", occupants: ["u2"], types: [
+            { type: "temperature", domain: "sensor", ordered: true, assist_first: S.notFirst ? false : true, sensors: [sn("sensor.salon_temp", "Salon temperature", "temperature", "21", "°C", true, { homekit: ["Bridge"] }), sn("sensor.salon_temp2", "Salon temperature 2", "temperature", "22", "°C", false, { matter: S.noMatter ? [] : ["Hub"] })] },
+            { type: "humidity", domain: "sensor", ordered: false, assist_first: null, sensors: [sn("sensor.salon_hum", "Salon humidity", "humidity", "50", "%", false)] }] },
+          { id: "area:cuisine", area_id: "cuisine", name: "Cuisine", kind: "room", occupants: [], types: [] }],
+          unassigned: [sn("sensor.loose", "Loose sensor", "other", "3", null, false)], homekit: [{ title: "Bridge", mode: "bridge" }], matter: { available: !S.noMatter, bridges: S.noMatter ? [] : ["Hub"] } };
+      }
       if (msg.type === "home_structure/save") {
         if (S.fail === "save") throw { message: "boom" };
         S.options = JSON.parse(JSON.stringify(msg.options)); S.saves.push(S.options);

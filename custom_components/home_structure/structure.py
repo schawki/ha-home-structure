@@ -5,7 +5,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar, device_registry as dr, entity_registry as er, floor_registry as fr
 
-from . import groups as groups_mod, model
+from . import groups as groups_mod, model, room_sensors
 from .const import DOMAIN
 
 
@@ -125,6 +125,15 @@ async def occupants_view(hass: HomeAssistant, entry: ConfigEntry) -> dict:
     by_user = model.rooms_of_users({a: [u for u in us if u in ids] for a, us in by_room.items()})
     return {"rooms": {a: [u for u in us if u in ids] for a, us in by_room.items() if any(u in ids for u in us)},
             "users": [{"id": u["id"], "name": u["name"], "person_entity_id": people.get(u["id"]), "area_ids": by_user.get(u["id"], [])} for u in known]}
+
+
+async def room_sensors_view(hass: HomeAssistant, entry: ConfigEntry) -> dict:
+    """The sensors of the rooms by type, with Assist, HomeKit and Matter exposure: what the service `get_room_sensors` returns."""
+    spaces = model.spaces(entry.options, areas(hass))
+    ids = {u["id"] for u in await users(hass)}
+    for sp in spaces:
+        sp["occupants"] = [u for u in sp["occupants"] if u in ids]       # a deleted user is not an occupant
+    return room_sensors.view(hass, spaces, await room_sensors.matter_bridges(hass))
 
 
 def adjacency(hass: HomeAssistant, entry: ConfigEntry, level: str) -> dict[str, list[str]]:

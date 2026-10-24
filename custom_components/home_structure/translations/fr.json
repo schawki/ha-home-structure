@@ -308,6 +308,10 @@
       "name": "Obtenir les occupants habituels",
       "description": "Renvoie, pour chaque pièce, les utilisateurs qui l'occupent habituellement, et pour chaque utilisateur les pièces qu'il occupe habituellement et son entité personne."
     },
+    "get_room_sensors": {
+      "name": "Obtenir les capteurs des pièces",
+      "description": "Renvoie, pour chaque pièce, ses capteurs et capteurs binaires regroupés par type (celui exposé à Assist en premier), avec ce qui est exposé à Assist, HomeKit et Matter, ainsi que les capteurs qui ne sont dans aucune pièce."
+    },
     "get_adjacency": {
       "name": "Obtenir l'adjacence",
       "description": "Renvoie, pour chaque pièce, les pièces où l'on peut aller depuis elle (portes, ouvertures, espaces ouverts), dans les deux sens. Utile à une intégration qui suit les déplacements entre pièces.",

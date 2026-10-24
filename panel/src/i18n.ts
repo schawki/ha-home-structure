@@ -31,7 +31,7 @@ const EN = {
   passage_none: "No passage", passage_possible: "Exceptional passage", passage_normal: "Everyday passage",
   passageIs_none: "No passage.", passageIs_possible: "A possible passage, not an everyday route.", passageIs_normal: "People go through here in everyday life.",
   type_grille_full: "security grille or mesh door",
-  tabPlan: "Plan", tabGroups: "Groups", groupsTitle: "Groups of rooms",
+  tabPlan: "Plan", tabRooms: "Rooms", tabGroups: "Groups", groupsTitle: "Groups of rooms",
   add: "Add", noGroups: "No group yet. Use + Add to create one (the bedrooms, the night part…). A room can be in several groups.",
   ungrouped: "Not in any group", roomsOne: "1 room", roomsMany: "{n} rooms", emptyGroup: "No room in this group yet.",
   editGroup: "Edit group", deleteGroup: "Delete group", rearrangeRooms: "Rearrange rooms", rearrangeGroups: "Rearrange groups", done: "Done", more: "More",
@@ -52,6 +52,12 @@ const EN = {
   close: "Close", list: "List", plan: "Plan",
   lockLocked: "Locked", lockUnlocked: "Unlocked", lockUnlockTitle: "The plan is locked. Click to unlock it and make changes.", lockLockTitle: "Click to lock the plan again.",
   planLockedHint: "The plan is locked. Unlock it to make changes.",
+  roomsHelp: "The sensors of each room, by type. When a type has several sensors, the number is their priority: the first is the one other integrations use first. For now this page only shows; nothing is changed here.",
+  matterUnavailable: "The Matter bridges could not be read, so no Matter badge is shown.",
+  roomsEmpty: "No room on the plan yet.", noSensorsInRoom: "No sensor in this room.", typeOther: "Other",
+  assist: "Assist", assistHelp: "Exposed to Assist (set in Home Assistant, Voice assistants)", priority: "Priority {n}",
+  notFirst: "The first sensor is not the one Assist uses.", occupantsLabel: "Usual occupants:",
+  unassignedTitle: "Sensors with no room", unassignedHelp: "These sensors are in no area.",
   occupantsTitle: "Usual occupants", occupantsHint: "The people who usually use this room. Other integrations, such as a dashboard, can read this.", noUsers: "No user found.",
 } as const;
 export type Key = keyof typeof EN;
@@ -89,7 +95,7 @@ const FR: Dict = {
   passage_none: "Pas de passage", passage_possible: "Passage exceptionnel", passage_normal: "Passage quotidien",
   passageIs_none: "Pas de passage.", passageIs_possible: "Un passage possible, pas un trajet de tous les jours.", passageIs_normal: "On passe ici au quotidien.",
   type_grille_full: "grille ou porte grillagée",
-  tabPlan: "Plan", tabGroups: "Groupes", groupsTitle: "Groupes de pièces",
+  tabPlan: "Plan", tabRooms: "Pièces", tabGroups: "Groupes", groupsTitle: "Groupes de pièces",
   add: "Ajouter", noGroups: "Aucun groupe pour l'instant. Utilisez + Ajouter pour en créer un (les chambres, la partie nuit…). Une pièce peut être dans plusieurs groupes.",
   ungrouped: "Dans aucun groupe", roomsOne: "1 pièce", roomsMany: "{n} pièces", emptyGroup: "Aucune pièce dans ce groupe pour l'instant.",
   editGroup: "Modifier le groupe", deleteGroup: "Supprimer le groupe", rearrangeRooms: "Réorganiser les pièces", rearrangeGroups: "Réorganiser les groupes", done: "Terminé", more: "Plus",
@@ -110,6 +116,12 @@ const FR: Dict = {
   close: "Fermer", list: "Liste", plan: "Plan",
   lockLocked: "Verrouillé", lockUnlocked: "Déverrouillé", lockUnlockTitle: "Le plan est verrouillé. Cliquez pour le déverrouiller et le modifier.", lockLockTitle: "Cliquez pour verrouiller de nouveau le plan.",
   planLockedHint: "Le plan est verrouillé. Déverrouillez-le pour faire des modifications.",
+  roomsHelp: "Les capteurs de chaque pièce, par type. Quand un type a plusieurs capteurs, le numéro est leur priorité : le premier est celui que les autres intégrations utilisent en premier. Pour l'instant cette page affiche seulement ; rien n'est modifié ici.",
+  matterUnavailable: "Les ponts Matter n'ont pas pu être lus : aucun badge Matter n'est affiché.",
+  roomsEmpty: "Aucune pièce sur le plan pour l'instant.", noSensorsInRoom: "Aucun capteur dans cette pièce.", typeOther: "Autre",
+  assist: "Assist", assistHelp: "Exposé à Assist (réglé dans Home Assistant, Assistants vocaux)", priority: "Priorité {n}",
+  notFirst: "Le premier capteur n'est pas celui qu'Assist utilise.", occupantsLabel: "Occupants habituels :",
+  unassignedTitle: "Capteurs sans pièce", unassignedHelp: "Ces capteurs ne sont dans aucune zone.",
   occupantsTitle: "Occupants habituels", occupantsHint: "Les personnes qui utilisent habituellement cette pièce. D'autres intégrations, comme un tableau de bord, peuvent le lire.", noUsers: "Aucun utilisateur trouvé.",
 };
 
