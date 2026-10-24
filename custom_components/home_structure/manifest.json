@@ -1,11 +1,11 @@
 {
   "domain": "home_structure",
   "name": "Home Structure",
-  "codeowners": [
-    "@schawki"
-  ],
   "after_dependencies": [
     "hassio"
+  ],
+  "codeowners": [
+    "@schawki"
   ],
   "config_flow": true,
   "dependencies": [
