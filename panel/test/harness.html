@@ -36,21 +36,44 @@
   };
   const kinds = ["garden", "balcony", "terrace", "courtyard", "garage", "hall", "stairwell", "common_area", "street", "neighbor", "other"];
   const inHome = { garden: true, balcony: true, terrace: true, courtyard: false, garage: true, hall: false, stairwell: false, common_area: false, street: false, neighbor: false, other: false };
+  // ---- the Rooms page: a small stateful stand-in for the sensors, their exposure, their rooms, their order and the history
+  const mk = (id, name, cls, st, unit, area, extra = {}) => ({ entity_id: id, name, state: st, unit, domain: "sensor", type: cls, area_id: area, device_id: null, device_name: null, assist: false, alexa: false, google: false, homekit: [], matter: [], ...extra });
+  S.sensors = [mk("sensor.salon_temp", "Salon temperature", "temperature", "21", "°C", "salon", { assist: true, homekit: ["Bridge"], device_id: "dev1", device_name: "Thermo" }),
+    mk("sensor.salon_temp2", "Salon temperature 2", "temperature", "22", "°C", "salon", { matter: q.get("nomatter") ? [] : ["Hub"] }),
+    mk("sensor.salon_hum", "Salon humidity", "humidity", "50", "%", "salon", { device_id: "dev1", device_name: "Thermo" }), mk("sensor.loose", "Loose sensor", "other", "3", null, null)];
+  S.saved = {}; S.history = []; S.hid = 0; S.writes = [];
+  if (q.get("notfirst")) { S.sensors[0].assist = false; S.sensors[1].assist = true; S.saved["salon"] = { "sensor.temperature": ["sensor.salon_temp", "sensor.salon_temp2"] }; }
+  const stamp = (e) => { const x = { id: "h" + ++S.hid, time: "2026-10-24T20:00:00", undone: false, ...e }; S.history.unshift(x); return x; };
+  const groupsOf = (area) => {
+    const by = {}; S.sensors.filter((x) => x.area_id === area).forEach((x) => (by[x.domain + "." + x.type] ||= []).push(x));
+    return Object.entries(by).map(([key, items]) => {
+      const saved = S.saved[area]?.[key];
+      items.sort((x, y) => (saved ? saved.indexOf(x.entity_id) - saved.indexOf(y.entity_id) : (y.assist - x.assist) || x.name.localeCompare(y.name)));
+      const ordered = items.length >= 2, exp = items.some((x) => x.assist);
+      return { key, type: key.split(".")[1], domain: "sensor", sensors: items, ordered, saved: !!saved && ordered, assist_first: ordered && exp ? items[0].assist : null };
+    });
+  };
+  const R = {
+    room_sensors: () => ({ rooms: [{ id: "area:salon", area_id: "salon", name: "Salon", kind: "room", occupants: ["u2"], types: groupsOf("salon") }, { id: "area:cuisine", area_id: "cuisine", name: "Cuisine", kind: "room", occupants: [], types: groupsOf("cuisine") }],
+      unassigned: S.sensors.filter((x) => !x.area_id), homekit: [{ title: "Bridge", mode: "bridge" }], assistants: { alexa: !!q.get("alexa"), google: !!q.get("alexa") }, matter: { available: !q.get("nomatter"), bridges: q.get("nomatter") ? [] : ["Hub"] } }),
+    exposure_set: (m) => { if (q.get("failwrite")) throw { code: "changed_since", message: "x" }; const x = S.sensors.find((y) => y.entity_id === m.entity_id); const [k, v] = Object.entries(m.changes)[0]; const f = k === "conversation" ? "assist" : k;
+      const before = { [k]: x[f] }; x[f] = v; S.writes.push(["exposure", m.entity_id, k, v]); return stamp({ kind: "exposure", entity_id: m.entity_id, before, after: { [k]: v } }); },
+    move_preview: (m) => { const x = S.sensors.find((y) => y.entity_id === m.entity_id); const dev = x.device_id ? { id: "dev1", name: "Thermo", area_id: "salon", others: S.sensors.filter((y) => y.device_id === "dev1" && y !== x).map((y) => ({ entity_id: y.entity_id, name: y.name, area_id: y.area_id })) } : null;
+      const none = { automation: [], script: [], scene: [] };
+      return { entity_id: m.entity_id, area_id: x.area_id, own_area: null, target_area: m.area_id, device: dev, sensor: x.entity_id === "sensor.salon_temp" ? { ...none, automation: [{ entity_id: "automation.cold", name: "Cold alert" }] } : none, device_refs: dev ? { ...none, script: [{ entity_id: "script.warm", name: "Warm up" }] } : null }; },
+    move_apply: (m) => { const x = S.sensors.find((y) => y.entity_id === m.entity_id); const before = { area: x.area_id }; const moved = m.scope === "device" ? S.sensors.filter((y) => y.device_id === x.device_id) : [x];
+      moved.forEach((y) => (y.area_id = m.area_id)); S.writes.push(["move", m.entity_id, m.area_id, m.scope]); return stamp({ kind: "move", entity_id: m.entity_id, scope: m.scope, area_id: m.area_id, before, after: { area: m.area_id } }); },
+    save_order: (m) => { S.writes.push(["order", m.area_id, m.key, m.entity_ids]); if (m.entity_ids.length) (S.saved[m.area_id] ||= {})[m.key] = m.entity_ids; else if (S.saved[m.area_id]) delete S.saved[m.area_id][m.key]; return {}; },
+    history: () => ({ entries: S.history }),
+    undo: (m) => { const e = S.history.find((x) => x.id === m.entry_id); e.undone = true; if (e.kind === "exposure") { const [k, v] = Object.entries(e.before)[0]; S.sensors.find((y) => y.entity_id === e.entity_id)[k === "conversation" ? "assist" : k] = v; } S.writes.push(["undo", e.id]); return e; },
+  };
   const hass = {
     language: q.get("lang") || "en",
     states: { "binary_sensor.porte": { state: "off", attributes: {} }, "cover.volet": { state: "open", attributes: { current_position: 40 } } },
     async callWS(msg) {
       S.calls.push(msg.type);
       if (msg.type === "home_structure/get") return { areas, users: S.users ?? [{ id: "u1", name: "Amal" }, { id: "u2", name: "Karim" }], options: JSON.parse(JSON.stringify(S.options)), kinds, types: ["open_space", "opening", "door", "glass_door", "grille", "window", "shutter", "wall"], in_home: inHome, permanent: { open_space: "open", opening: "open", wall: "closed" }, sensor_domains: ["binary_sensor", "cover"], shutter_hosts: ["door", "glass_door", "window"], lock_hosts: ["door", "glass_door", "grille"], passage_levels: ["none", "possible", "normal"], passage_by_type: { open_space: "normal", opening: "normal", door: "normal", glass_door: "normal", grille: "normal", window: "possible", shutter: "possible", wall: "none" }, passage_ambiguous: ["grille", "window", "shutter"], room_type_groups: RTG, room_types: Object.values(RTG).flat() };
-      if (msg.type === "home_structure/room_sensors") {
-        const sn = (id, name, cls, st, unit, assist, extra = {}) => ({ entity_id: id, name, state: st, unit, domain: "sensor", type: cls, area_id: null, device_id: null, device_name: null, assist, homekit: [], matter: [], ...extra });
-        return { rooms: [
-          { id: "area:salon", area_id: "salon", name: "Salon", kind: "room", occupants: ["u2"], types: [
-            { type: "temperature", domain: "sensor", ordered: true, assist_first: S.notFirst ? false : true, sensors: [sn("sensor.salon_temp", "Salon temperature", "temperature", "21", "°C", true, { homekit: ["Bridge"] }), sn("sensor.salon_temp2", "Salon temperature 2", "temperature", "22", "°C", false, { matter: S.noMatter ? [] : ["Hub"] })] },
-            { type: "humidity", domain: "sensor", ordered: false, assist_first: null, sensors: [sn("sensor.salon_hum", "Salon humidity", "humidity", "50", "%", false)] }] },
-          { id: "area:cuisine", area_id: "cuisine", name: "Cuisine", kind: "room", occupants: [], types: [] }],
-          unassigned: [sn("sensor.loose", "Loose sensor", "other", "3", null, false)], homekit: [{ title: "Bridge", mode: "bridge" }], matter: { available: !S.noMatter, bridges: S.noMatter ? [] : ["Hub"] } };
-      }
+      if (msg.type.startsWith("home_structure/") && R[msg.type.slice(15)]) return R[msg.type.slice(15)](msg);
       if (msg.type === "home_structure/save") {
         if (S.fail === "save") throw { message: "boom" };
         S.options = JSON.parse(JSON.stringify(msg.options)); S.saves.push(S.options);

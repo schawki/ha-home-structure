@@ -21,7 +21,7 @@ def _entry(hass: HomeAssistant) -> ConfigEntry | None:
 
 
 def _options(entry: ConfigEntry) -> dict:
-    return copy.deepcopy({"zones": [], "connections": [], "excluded_areas": [], "layout": {}, "room_types": {}, "room_occupants": {}, "groups": [], **entry.options})
+    return copy.deepcopy({"zones": [], "connections": [], "excluded_areas": [], "layout": {}, "room_types": {}, "room_occupants": {}, "sensor_order": {}, "groups": [], **entry.options})
 
 
 @websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/get"})
@@ -51,6 +51,7 @@ async def ws_save(hass: HomeAssistant, connection: websocket_api.ActiveConnectio
         return
     data = {"zones": [], "connections": [], "excluded_areas": [], "layout": {}, "room_types": {}, "room_occupants": {}, **copy.deepcopy(msg["options"])}
     data["groups"] = copy.deepcopy(entry.options.get("groups", []))        # the groups have their own command: a plan saved late never overwrites them
+    data["sensor_order"] = copy.deepcopy(entry.options.get("sensor_order", {}))      # so has the order of the sensors of each room
     area_ids = {a["id"] for a in structure.areas(hass)}
     model.apply_layout(data, area_ids)
     model.prune_occupants(data, {u["id"] for u in await structure.users(hass)})      # users deleted in Home Assistant are forgotten
@@ -135,9 +136,42 @@ async def ws_room_sensors(hass: HomeAssistant, connection: websocket_api.ActiveC
     connection.send_result(msg["id"], await structure.room_sensors_view(hass, entry))
 
 
-COMMANDS = (ws_get, ws_save, ws_candidates, ws_save_groups, ws_group_sensors, ws_room_sensors)
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/save_order", vol.Required("area_id"): str, vol.Required("key"): str, vol.Required("entity_ids"): [str]})
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_save_order(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    """Saves the priority of the sensors of one type in one room (the first is the one other integrations use first); an empty list goes back to the automatic order.
+
+    The list must hold exactly the sensors of that type in that room. Nothing is rebuilt: the order only shows in `get_room_sensors`."""
+    entry = _entry(hass)
+    if entry is None:
+        connection.send_error(msg["id"], "not_loaded", "Home Structure is not set up")
+        return
+    area_id, key, ids = msg["area_id"], msg["key"], msg["entity_ids"]
+    if ids:
+        view = await structure.room_sensors_view(hass, entry)
+        room = next((r for r in view["rooms"] if r["area_id"] == area_id), None)
+        group = next((g for g in (room["types"] if room else []) if g["key"] == key), None)
+        if group is None or len(ids) != len(set(ids)) or set(ids) != {s["entity_id"] for s in group["sensors"]}:
+            connection.send_error(msg["id"], "invalid_order", "The list must hold exactly the sensors of this type in this room")
+            return
+    order = copy.deepcopy(entry.options.get("sensor_order") or {})
+    if ids:
+        order.setdefault(area_id, {})[key] = ids
+    else:
+        order.get(area_id, {}).pop(key, None)
+        if not order.get(area_id):
+            order.pop(area_id, None)
+    hass.config_entries.async_update_entry(entry, options={**_options(entry), "sensor_order": order})
+    hass.bus.async_fire(EVENT_CHANGED, {"reason": REASON_SAVED_STRUCTURE})
+    connection.send_result(msg["id"], {"sensor_order": order})
+
+
+COMMANDS = (ws_get, ws_save, ws_candidates, ws_save_groups, ws_group_sensors, ws_room_sensors, ws_save_order)
 
 
 def async_register(hass: HomeAssistant) -> None:
+    from . import exposure
     for command in COMMANDS:
         websocket_api.async_register_command(hass, command)
+    exposure.async_register(hass)

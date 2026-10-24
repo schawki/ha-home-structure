@@ -184,38 +184,54 @@ def collect(hass: HomeAssistant) -> list[dict]:
     return out
 
 
+def type_key(domain: str, kind: str) -> str:
+    """The key of a type of sensors in a room, used to store its order: "sensor.temperature", "binary_sensor.motion"."""
+    return f"{domain}.{kind}"
+
+
 def _sort_key(s: dict) -> tuple:
     return (not s["assist"], s["name"].casefold(), s["entity_id"])      # the sensor exposed to Assist comes first, until the user saves an order
 
 
-def grouped(sensors: list[dict]) -> list[dict]:
-    """The sensors of one room by type: [{type, domain, sensors, ordered, assist_first}].
+def grouped(sensors: list[dict], saved: dict[str, list[str]] | None = None) -> list[dict]:
+    """The sensors of one room by type: [{key, type, domain, sensors, ordered, saved, assist_first}].
 
-    `ordered` is true when there are at least two sensors of the type (only then does their order mean something); `assist_first` tells whether
-    the first one is the one exposed to Assist, or None when none is exposed or there is nothing to compare."""
+    `ordered` is true when there are at least two sensors of the type (only then does their order mean something). `saved` is true when the user
+    saved an order for it (`saved` is {type key: [entity id]}): that order is kept, a sensor it does not list comes after, in the automatic order.
+    Without a saved order the sensor exposed to Assist comes first. `assist_first` tells whether the first sensor is the one exposed to Assist, or
+    None when none is exposed or there is nothing to compare."""
+    saved = saved or {}
     buckets: dict[tuple[str, str], list[dict]] = {}
     for s in sensors:
         buckets.setdefault((s["domain"], s["type"]), []).append(s)
     out = []
     for (domain, kind), items in sorted(buckets.items(), key=lambda kv: (kv[0][1] == OTHER, kv[0][1], kv[0][0])):
+        key = type_key(domain, kind)
         items = sorted(items, key=_sort_key)
+        mine = saved.get(key)
+        if mine:
+            rank = {eid: i for i, eid in enumerate(mine)}
+            items = sorted(items, key=lambda s: rank.get(s["entity_id"], len(rank)))      # stable: the unlisted ones keep the automatic order
         ordered = len(items) >= 2
         exposed = [s for s in items if s["assist"]]
-        out.append({"type": kind, "domain": domain, "sensors": items, "ordered": ordered,
+        out.append({"key": key, "type": kind, "domain": domain, "sensors": items, "ordered": ordered, "saved": bool(mine) and ordered,
                     "assist_first": (items[0]["assist"] if exposed else None) if ordered else None})
     return out
 
 
-def view(hass: HomeAssistant, spaces: list[dict], bridges: list[dict] | None) -> dict:
+def view(hass: HomeAssistant, spaces: list[dict], bridges: list[dict] | None, order: dict[str, dict[str, list[str]]] | None = None) -> dict:
     """What the Rooms panel and the service `get_room_sensors` return.
 
     `rooms` follows `spaces` (the ones that are Home Assistant areas), each with its `occupants`; `unassigned` lists the sensors that are in no area
     (a sensor of an area that is not on the plan is not listed). `homekit` lists the HomeKit entries and `matter` is {available, bridges} (`bridges` are names; available is false when the
     add-on could not be read, in which case no sensor carries a Matter badge)."""
-    filters = homekit_filters(hass)
+    from .exposure import available, exposed
+    filters, can = homekit_filters(hass), available(hass)
+    order = order or {}
     found = collect(hass)
     for s in found:
-        s["assist"] = assist_exposed(hass, s["entity_id"])
+        flags = exposed(hass, s["entity_id"], can)
+        s["assist"], s["alexa"], s["google"] = flags.get("conversation", False), flags.get("alexa", False), flags.get("google", False)
         s["homekit"] = homekit_titles(filters, s["entity_id"])
         s["matter"] = matter_titles(bridges, {"entity_id": s["entity_id"], "domain": s["domain"], "platform": s["platform"], "device_class": None if s["type"] == OTHER else s["type"],
                                               "area_id": s["area_id"], "device_id": s["device_id"], "labels": s["labels"]}) if bridges is not None else []
@@ -224,8 +240,8 @@ def view(hass: HomeAssistant, spaces: list[dict], bridges: list[dict] | None) ->
     for s in found:
         by_area.setdefault(s["area_id"], []).append(s)
     rooms = [{"id": sp["id"], "area_id": sp["area_id"], "name": sp["name"], "kind": sp["kind"], "occupants": sp.get("occupants", []),
-              "types": grouped(by_area.get(sp["area_id"], []))} for sp in spaces if sp.get("area_id")]
+              "types": grouped(by_area.get(sp["area_id"], []), order.get(sp["area_id"]))} for sp in spaces if sp.get("area_id")]
     loose = [s for s in found if s["area_id"] is None]
     return {"rooms": rooms, "unassigned": sorted(loose, key=lambda s: (s["type"], s["name"].casefold())),
-            "homekit": [{"title": f["title"], "mode": f["mode"]} for f in filters],
+            "homekit": [{"title": f["title"], "mode": f["mode"]} for f in filters], "assistants": {"alexa": can["alexa"], "google": can["google"]},
             "matter": {"available": bridges is not None, "bridges": [b["name"] for b in bridges] if bridges is not None else []}}

@@ -133,7 +133,7 @@ async def room_sensors_view(hass: HomeAssistant, entry: ConfigEntry) -> dict:
     ids = {u["id"] for u in await users(hass)}
     for sp in spaces:
         sp["occupants"] = [u for u in sp["occupants"] if u in ids]       # a deleted user is not an occupant
-    return room_sensors.view(hass, spaces, await room_sensors.matter_bridges(hass))
+    return room_sensors.view(hass, spaces, await room_sensors.matter_bridges(hass), entry.options.get("sensor_order") or {})
 
 
 def adjacency(hass: HomeAssistant, entry: ConfigEntry, level: str) -> dict[str, list[str]]:
