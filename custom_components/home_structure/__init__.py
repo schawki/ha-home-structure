@@ -20,6 +20,7 @@ from .const import DOMAIN, EVENT_CHANGED, PLATFORMS, REASON_LOADED
 SERVICE_GET_STRUCTURE = "get_structure"
 SERVICE_GET_GROUPS = "get_groups"
 SERVICE_GET_ADJACENCY = "get_adjacency"
+SERVICE_GET_OCCUPANTS = "get_occupants"
 CONFIG_SCHEMA = vol.Schema({DOMAIN: vol.Schema({})}, extra=vol.ALLOW_EXTRA)
 
 
@@ -42,7 +43,14 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             raise ServiceValidationError(translation_domain=DOMAIN, translation_key="not_loaded")
         return {"adjacency": structure.adjacency(hass, entries[0], call.data["level"])}
 
+    async def get_occupants(call: ServiceCall) -> dict:
+        entries = [e for e in hass.config_entries.async_entries(DOMAIN) if e.state is ConfigEntryState.LOADED]
+        if not entries:
+            raise ServiceValidationError(translation_domain=DOMAIN, translation_key="not_loaded")
+        return await structure.occupants_view(hass, entries[0])
+
     hass.services.async_register(DOMAIN, SERVICE_GET_STRUCTURE, get_structure, supports_response=SupportsResponse.ONLY)
+    hass.services.async_register(DOMAIN, SERVICE_GET_OCCUPANTS, get_occupants, supports_response=SupportsResponse.ONLY)
     hass.services.async_register(DOMAIN, SERVICE_GET_GROUPS, get_groups, supports_response=SupportsResponse.ONLY)
     hass.services.async_register(DOMAIN, SERVICE_GET_ADJACENCY, get_adjacency, schema=vol.Schema({vol.Optional("level", default="normal"): vol.In(["normal", "possible"])}),
                                  supports_response=SupportsResponse.ONLY)

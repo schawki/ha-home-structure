@@ -5,7 +5,8 @@ Data (stored in the options of the config entry):
     excluded_areas: [area id]    Home Assistant areas left out of the structure (technical groupings, for example); every other area is a room
     layout:      {space id: {x, y}}              where each space sits on the plan of the editor panel; a space without a position is not on the plan yet
     room_types:  {space id: type}               what an ordinary room is used for (bedroom, bathroom…), optional; only rooms have one
-    zones:       [{id, kind, in_home, name?}]   spaces other than rooms; id is "zone:<slug>", or "area:<area id>" to give a kind to a Home Assistant area
+    room_occupants: {space id: [user id]}       the Home Assistant users who usually use an ordinary room, optional; only rooms have them
+    zones:      [{id, kind, in_home, name?}]   spaces other than rooms; id is "zone:<slug>", or "area:<area id>" to give a kind to a Home Assistant area
     connections: [{id, a, b, separations: [{id, type, sensor?, shutter?, lock?, passage?}]}]   a and b are space ids; two spaces with no connection are not adjacent
 
 A connection is stored once and holds in both directions, so adjacency is always reciprocal.
@@ -44,10 +45,12 @@ def unique_zone_id(name: str, taken: set[str]) -> str:
 def spaces(data: dict, areas: list[dict]) -> list[dict]:
     """Every space: the Home Assistant areas (rooms, unless given a kind as a zone) then the zones that are not an area.
 
-    `areas` is [{"id", "name"}]. Each space is {id, name, kind, in_home, area_id}."""
+    `areas` is [{"id", "name"}]. Each space is {id, name, kind, in_home, area_id, room_type, occupants}; `occupants` are the ids of the users who
+    usually use the room (always empty for a zone)."""
     zones = {z["id"]: z for z in data.get("zones", [])}
     left_out = set(data.get("excluded_areas", []))
     types = data.get("room_types") or {}
+    usual = data.get("room_occupants") or {}
     out = []
     for a in areas:
         if a["id"] in left_out:
@@ -55,10 +58,11 @@ def spaces(data: dict, areas: list[dict]) -> list[dict]:
         sid = f"area:{a['id']}"
         z = zones.get(sid)
         out.append({"id": sid, "name": (z or {}).get("name") or a["name"], "kind": z["kind"] if z else "room",
-                    "in_home": z["in_home"] if z else True, "area_id": a["id"], "room_type": None if z else types.get(sid)})
+                    "in_home": z["in_home"] if z else True, "area_id": a["id"], "room_type": None if z else types.get(sid),
+                    "occupants": [] if z else list(usual.get(sid, []))})
     for z in data.get("zones", []):
         if not z["id"].startswith("area:"):
-            out.append({"id": z["id"], "name": z["name"], "kind": z["kind"], "in_home": z["in_home"], "area_id": None, "room_type": None})
+            out.append({"id": z["id"], "name": z["name"], "kind": z["kind"], "in_home": z["in_home"], "area_id": None, "room_type": None, "occupants": []})
     return out
 
 
@@ -70,6 +74,9 @@ def validate(data: dict, area_ids: set[str]) -> list[str]:
     for sid, kind in (data.get("room_types") or {}).items():
         if kind not in ROOM_TYPES or sid not in known or sid in zone_ids:
             errors.append("invalid_room_type")
+    for sid, users in (data.get("room_occupants") or {}).items():
+        if sid not in known or sid in zone_ids or not isinstance(users, list) or any(not isinstance(u, str) or not u for u in users):
+            errors.append("invalid_occupants")
     names = [z["name"].casefold() for z in data.get("zones", []) if z.get("name")]
     if len(names) != len(set(names)):
         errors.append("duplicate_zone_name")
@@ -221,6 +228,7 @@ def exclude_areas(data: dict, area_ids: set[str]) -> None:
     data["zones"] = [z for z in data.get("zones", []) if z["id"] not in gone]
     data["connections"] = [c for c in data.get("connections", []) if c["a"] not in gone and c["b"] not in gone]
     data["room_types"] = {k: v for k, v in (data.get("room_types") or {}).items() if k not in gone}
+    data["room_occupants"] = {k: v for k, v in (data.get("room_occupants") or {}).items() if k not in gone}
 
 
 def set_area_kinds(data: dict, kinds: dict[str, list[str]], keep: set[str]) -> None:
@@ -267,6 +275,36 @@ def apply_layout(data: dict, area_ids: set[str]) -> None:
     data["layout"] = {k: v for k, v in data["layout"].items() if k in known}
     zone_ids = {z["id"] for z in data["zones"]}
     data["room_types"] = {k: v for k, v in (data.get("room_types") or {}).items() if k in known and k not in zone_ids and v in ROOM_TYPES}   # only rooms have one
+    usual = {}
+    for k, users in (data.get("room_occupants") or {}).items():
+        if k not in known or k in zone_ids:
+            continue                                      # only rooms have usual occupants
+        if isinstance(users, list):
+            users = list(dict.fromkeys(u for u in users if isinstance(u, str) and u))      # no duplicates, no blanks, order kept
+            if not users:
+                continue                                  # nobody: the same as no entry
+        usual[k] = users                                  # a malformed value is kept so that validate reports it
+    data["room_occupants"] = usual
+
+
+def prune_occupants(data: dict, user_ids: set[str]) -> None:
+    """Takes the users that no longer exist (deleted in Home Assistant) out of the usual occupants; a room left with nobody loses its entry."""
+    kept = {k: [u for u in users if u in user_ids] for k, users in (data.get("room_occupants") or {}).items() if isinstance(users, list)}
+    data["room_occupants"] = {k: users for k, users in kept.items() if users}
+
+
+def occupants(structure: dict) -> dict[str, list[str]]:
+    """The usual occupants of each room as user ids: {area id: [user id]}, from a structure as `build` returns it. Rooms with nobody are left out."""
+    return {s["area_id"]: list(s["occupants"]) for s in structure["spaces"] if s.get("area_id") and s.get("occupants")}
+
+
+def rooms_of_users(by_room: dict[str, list[str]]) -> dict[str, list[str]]:
+    """The other way round: {user id: [area id]}, from `occupants`."""
+    out: dict[str, list[str]] = {}
+    for area, users in by_room.items():
+        for u in users:
+            out.setdefault(u, []).append(area)
+    return {u: sorted(areas) for u, areas in out.items()}
 
 
 def drop_default_passage(data: dict) -> None:

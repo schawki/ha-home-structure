@@ -107,6 +107,26 @@ def all_locks(hass: HomeAssistant) -> list[dict]:
     return [{"entity_id": s.entity_id, "name": s.name, "state": s.state} for s in sorted(hass.states.async_all("lock"), key=lambda s: s.name.casefold())]
 
 
+async def users(hass: HomeAssistant) -> list[dict]:
+    """The people who can use Home Assistant: active users that are not system accounts, sorted by name. Each is {id, name}."""
+    return sorted(({"id": u.id, "name": u.name or u.id} for u in await hass.auth.async_get_users() if u.is_active and not u.system_generated),
+                  key=lambda u: u["name"].casefold())
+
+
+async def occupants_view(hass: HomeAssistant, entry: ConfigEntry) -> dict:
+    """The usual occupants of the rooms, what the service `get_occupants` returns.
+
+    `rooms` is {area id: [user id]}; `users` lists every user with the areas they usually use (empty when none) and the `person` entity linked to
+    the user, when there is one. A user that no longer exists is not listed."""
+    people = {s.attributes.get("user_id"): s.entity_id for s in hass.states.async_all("person") if s.attributes.get("user_id")}
+    by_room = model.occupants(current(hass, entry))
+    known = await users(hass)
+    ids = {u["id"] for u in known}
+    by_user = model.rooms_of_users({a: [u for u in us if u in ids] for a, us in by_room.items()})
+    return {"rooms": {a: [u for u in us if u in ids] for a, us in by_room.items() if any(u in ids for u in us)},
+            "users": [{"id": u["id"], "name": u["name"], "person_entity_id": people.get(u["id"]), "area_ids": by_user.get(u["id"], [])} for u in known]}
+
+
 def adjacency(hass: HomeAssistant, entry: ConfigEntry, level: str) -> dict[str, list[str]]:
     """The areas a person can go to from each area (see `model.adjacency`): what the service `get_adjacency` returns."""
     return model.adjacency(current(hass, entry), level)

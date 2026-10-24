@@ -8,8 +8,9 @@ export type GroupKind = "temperature" | "humidity";
 export interface SensorCfg { mode: SensorMode; entities: string[] }
 export interface Group { id: string; name: string; level: number | null; icon: string | null; areas: string[]; aliases: string[]; temperature: SensorCfg; humidity: SensorCfg }
 export interface GroupSensor { entity_id: string; name: string; state: string; unit: string; area_id: string; area: string }
-export interface Options { zones: Zone[]; connections: Conn[]; excluded_areas: string[]; layout: Record<string, Pos>; room_types: Record<string, string>; groups?: Group[] }
-export interface Bootstrap { areas: Area[]; options: Options; kinds: string[]; types: string[]; in_home: Record<string, boolean>; room_type_groups: Record<string, string[]>; permanent: Record<string, string>; sensor_domains: string[]; shutter_hosts: string[]; room_types: string[]; lock_hosts: string[]; passage_levels: string[]; passage_by_type: Record<string, string>; passage_ambiguous: string[] }
+export interface Options { zones: Zone[]; connections: Conn[]; excluded_areas: string[]; layout: Record<string, Pos>; room_types: Record<string, string>; room_occupants: Record<string, string[]>; groups?: Group[] }
+export interface User { id: string; name: string }
+export interface Bootstrap { areas: Area[]; options: Options; users: User[]; kinds: string[]; types: string[]; in_home: Record<string, boolean>; room_type_groups: Record<string, string[]>; permanent: Record<string, string>; sensor_domains: string[]; shutter_hosts: string[]; room_types: string[]; lock_hosts: string[]; passage_levels: string[]; passage_by_type: Record<string, string>; passage_ambiguous: string[] }
 export interface Sensor { entity_id: string; name: string; state: string }
 export interface Candidates { sensors: Sensor[]; filtered: boolean; locks: Sensor[]; locks_filtered: boolean }
 export interface Space { id: string; name: string; kind: string; room_type: string | null; in_home: boolean; area: Area | null; zone: Zone | null; pos: Pos }

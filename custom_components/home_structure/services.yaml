@@ -1,5 +1,6 @@
 get_structure:
 get_groups:
+get_occupants:
 get_adjacency:
   fields:
     level:

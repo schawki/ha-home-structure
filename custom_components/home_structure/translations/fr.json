@@ -182,7 +182,8 @@
       "invalid_room_type": "Un type de pièce est invalide, ou donné à autre chose qu'une pièce ordinaire.",
       "invalid_lock": "Une serrure ne peut être définie que sur une porte, une porte vitrée ou une grille, et ce doit être une entité serrure.",
       "passage_not_needed": "Seuls une grille, une fenêtre ou un volet ont un réglage de passage.",
-      "invalid_passage": "Un passage doit être aucun, possible ou normal."
+      "invalid_passage": "Un passage doit être aucun, possible ou normal.",
+      "invalid_occupants": "Les occupants habituels ne peuvent être définis que sur une pièce ordinaire, et doivent former une liste d'utilisateurs."
     }
   },
   "selector": {
@@ -302,6 +303,10 @@
     "get_groups": {
       "name": "Obtenir les groupes",
       "description": "Renvoie les groupes de pièces : leurs pièces (identifiants de pièces), alias et les capteurs qui donnent leur température et leur humidité."
+    },
+    "get_occupants": {
+      "name": "Obtenir les occupants habituels",
+      "description": "Renvoie, pour chaque pièce, les utilisateurs qui l'occupent habituellement, et pour chaque utilisateur les pièces qu'il occupe habituellement et son entité personne."
     },
     "get_adjacency": {
       "name": "Obtenir l'adjacence",

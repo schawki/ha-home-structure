@@ -21,19 +21,19 @@ def _entry(hass: HomeAssistant) -> ConfigEntry | None:
 
 
 def _options(entry: ConfigEntry) -> dict:
-    return copy.deepcopy({"zones": [], "connections": [], "excluded_areas": [], "layout": {}, "room_types": {}, "groups": [], **entry.options})
+    return copy.deepcopy({"zones": [], "connections": [], "excluded_areas": [], "layout": {}, "room_types": {}, "room_occupants": {}, "groups": [], **entry.options})
 
 
 @websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/get"})
 @websocket_api.require_admin
-@callback
-def ws_get(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+@websocket_api.async_response
+async def ws_get(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
     entry = _entry(hass)
     if entry is None:
         connection.send_error(msg["id"], "not_loaded", "Home Structure is not set up")
         return
     connection.send_result(msg["id"], {
-        "areas": structure.area_details(hass), "options": _options(entry), "kinds": ZONE_KINDS, "types": SEPARATION_TYPES,
+        "areas": structure.area_details(hass), "options": _options(entry), "users": await structure.users(hass), "kinds": ZONE_KINDS, "types": SEPARATION_TYPES,
         "in_home": ZONE_IN_HOME, "permanent": PERMANENT, "sensor_domains": SENSOR_DOMAINS, "shutter_hosts": SHUTTER_HOSTS, "room_types": ROOM_TYPES, "room_type_groups": ROOM_TYPE_GROUPS,
         "group_modes": list(groups_mod.MODES), "lock_hosts": LOCK_HOSTS,
         "passage_levels": PASSAGE_LEVELS, "passage_by_type": PASSAGE_BY_TYPE, "passage_ambiguous": PASSAGE_AMBIGUOUS,
@@ -49,10 +49,11 @@ async def ws_save(hass: HomeAssistant, connection: websocket_api.ActiveConnectio
     if entry is None:
         connection.send_error(msg["id"], "not_loaded", "Home Structure is not set up")
         return
-    data = {"zones": [], "connections": [], "excluded_areas": [], "layout": {}, "room_types": {}, **copy.deepcopy(msg["options"])}
+    data = {"zones": [], "connections": [], "excluded_areas": [], "layout": {}, "room_types": {}, "room_occupants": {}, **copy.deepcopy(msg["options"])}
     data["groups"] = copy.deepcopy(entry.options.get("groups", []))        # the groups have their own command: a plan saved late never overwrites them
     area_ids = {a["id"] for a in structure.areas(hass)}
     model.apply_layout(data, area_ids)
+    model.prune_occupants(data, {u["id"] for u in await structure.users(hass)})      # users deleted in Home Assistant are forgotten
     model.drop_default_passage(data)
     errors = model.validate(data, area_ids)
     if errors:

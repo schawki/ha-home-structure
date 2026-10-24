@@ -182,7 +182,8 @@
       "invalid_room_type": "A room type is invalid, or given to something that is not an ordinary room.",
       "invalid_lock": "A lock can only be set on a door, a glass door or a grille, and it must be a lock entity.",
       "passage_not_needed": "Only a grille, a window or a shutter has a passage setting.",
-      "invalid_passage": "A passage must be none, possible or normal."
+      "invalid_passage": "A passage must be none, possible or normal.",
+      "invalid_occupants": "Usual occupants can only be set on an ordinary room, and must be a list of users."
     }
   },
   "selector": {
@@ -302,6 +303,10 @@
     "get_groups": {
       "name": "Get groups",
       "description": "Returns the groups of rooms: their rooms (area ids), aliases and the sensors that give their temperature and humidity."
+    },
+    "get_occupants": {
+      "name": "Get usual occupants",
+      "description": "Returns, for each room, the users who usually use it, and for each user the rooms they usually use and their person entity."
     },
     "get_adjacency": {
       "name": "Get adjacency",

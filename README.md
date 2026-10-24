@@ -46,12 +46,12 @@ Requires Home Assistant 2025.8 or later and your rooms defined as areas.
 
 ## Setting it up
 
-Open **Home Structure** in the sidebar. You see a plan you arrange yourself, and everything you do is saved immediately and can be undone:
+Open **Home Structure** in the sidebar. You see a plan you arrange yourself, and everything you do is saved immediately and can be undone. The plan opens **locked** so that nothing changes by accident: you can look and select, but press **🔒 Locked** to unlock it before you edit.
 
 1. **Add your rooms.** The left column lists the Home Assistant areas that are not on the plan yet. Click **Add all** (they are laid out in one column per floor, which you can then move around), or drag or click only the ones you want. Areas left in the column are ignored. Nothing is guessed from names.
 2. **Move them** wherever makes sense to you, so the plan looks like your home. **Rearrange** lays everything out again by floor.
 3. **Connect them.** Drag the ● handle of a room onto the room next to it. Click the link to say what separates them (open space, door, glass door, grille, window, shutter, wall…), pick the opening sensor from the door, window and cover entities of the two rooms, pick the shutter in front of a window or door if there is one, and add a second separation if there is another. The link shows the live state of each separation (open, closed, partly open).
-4. **Give each room its type** in its panel (bedroom, nursery, gym, dressing room…), or leave it unspecified. One list covers rooms and outside spaces.
+4. **Give each room its type** in its panel (bedroom, nursery, gym, dressing room…), or leave it unspecified. One list covers rooms and outside spaces. In the same panel, tick the **usual occupants** of the room (Home Assistant users).
 5. **Add what is outside** with **+ Zone**: garden, balcony, hall, stairwell, street, a neighbouring home… The kind decides whether the zone is part of the home; you can change it. A room can also be turned into a zone kind (an area named "Garage" can be marked as a garage), and a room can be split by creating a zone next to it.
 
 On a narrow screen the plan becomes a list with the same editing. The older configuration screens (*Configure* on the integration) still work and edit the same data.
@@ -130,6 +130,7 @@ adjacency:
 
   Only areas appear (zones such as the street are left out), the relation is symmetric, and an area with no neighbour has an empty list. It is read-only: Home Structure does not write into other integrations' settings, and none reads it automatically yet, so copy the lists by hand where needed. The panel (not the options flow) manages shutters, locks and passage levels.
 - **A service** `home_structure.get_groups`, which returns the groups of rooms: `id`, `name`, `level`, `icon`, `aliases`, `area_ids`, `areas` (id and name) and, for `temperature` and `humidity`, the `mode`, the `entities` chosen and the `entity_id` of the group sensor (null without one).
+- **A service** `home_structure.get_occupants`, which returns the usual occupants of the rooms: `rooms` (`{area id: [user id]}`) and `users` (each user's `id`, `name`, `person_entity_id` when a person is linked to the user, and `area_ids`, the rooms they usually use). Set them in the plan: select a room and tick the users. Another integration, such as a dashboard, can use them.
 
 - **An event** `home_structure_changed`, fired when the structure or the groups are saved and when the integration is loaded (this includes a save made in the options flow). It carries only `reason` (`saved_structure`, `saved_groups` or `loaded`): an integration that keeps a copy of the structure listens to it and calls `get_structure`, `get_groups` or `get_adjacency` again.
 

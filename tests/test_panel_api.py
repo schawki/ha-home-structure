@@ -35,7 +35,7 @@ async def test_get_lists_areas_with_floors_and_the_vocabulary(hass, hass_ws_clie
     r = (await call(await hass_ws_client(hass), "get"))["result"]
     by = {a["name"]: a for a in r["areas"]}
     assert by["Living"]["floor"] == "Ground" and by["Servers"]["floor"] is None
-    assert r["options"] == {"zones": [], "connections": [], "excluded_areas": [], "layout": {}, "room_types": {}, "groups": []}
+    assert r["options"] == {"zones": [], "connections": [], "excluded_areas": [], "layout": {}, "room_types": {}, "room_occupants": {}, "groups": []}
     assert "dressing" in r["room_types"] and "nursery" in r["room_types"] and r["room_type_groups"]["sleeping"][:2] == ["bedroom", "master_bedroom"] and sum(r["room_type_groups"].values(), []) == r["room_types"] and "glass_door" in r["types"] and "hall" in r["kinds"] and r["in_home"]["garden"] is True and r["permanent"]["wall"] == "closed"
 
 
@@ -197,3 +197,34 @@ async def test_the_changed_event_tells_consumers_to_read_again(hass, hass_ws_cli
     assert (await call(client, "save_groups", groups=[{"id": "", "name": "Day", "level": 0, "icon": None, "aliases": [], "areas": [home["Living"]]}]))["success"]
     await hass.async_block_till_done()
     assert seen == [{"reason": "saved_groups"}]
+
+
+async def test_occupants_are_saved_listed_and_forgotten_with_their_user(hass, hass_ws_client, home):
+    amal = await hass.auth.async_create_user("Amal")
+    karim = await hass.auth.async_create_user("Karim")
+    entry = await setup(hass)
+    client = await hass_ws_client(hass)
+    r = (await call(client, "get"))["result"]
+    assert {"Amal", "Karim"} <= {u["name"] for u in r["users"]}
+    pos = {f"area:{home[n]}": {"x": i, "y": 0} for i, n in enumerate(("Living", "Kitchen"))}
+    opts = {"zones": [], "connections": [], "layout": pos, "room_occupants": {f"area:{home['Living']}": [amal.id, karim.id], f"area:{home['Kitchen']}": [amal.id]}}
+    saved = await call(client, "save", options=opts)
+    assert saved["success"] and saved["result"]["options"]["room_occupants"][f"area:{home['Kitchen']}"] == [amal.id]
+    again = await call(client, "save", options=copy.deepcopy(opts))
+    assert again["result"]["rebuilt"] is False                       # who uses a room does not rebuild the sensors
+    view = await hass.services.async_call(DOMAIN, "get_occupants", {}, blocking=True, return_response=True)
+    assert view["rooms"][home["Living"]] == [amal.id, karim.id]
+    me = next(u for u in view["users"] if u["id"] == amal.id)
+    assert sorted(me["area_ids"]) == sorted([home["Living"], home["Kitchen"]])
+    await hass.auth.async_remove_user(karim)
+    last = await call(client, "save", options=(await call(client, "get"))["result"]["options"])
+    assert last["result"]["options"]["room_occupants"][f"area:{home['Living']}"] == [amal.id]
+
+
+async def test_occupants_of_a_zone_are_left_out(hass, hass_ws_client, home):
+    amal = await hass.auth.async_create_user("Amal")
+    await setup(hass)
+    client = await hass_ws_client(hass)
+    ok = await call(client, "save", options={"zones": [{"id": "zone:rue", "name": "Rue", "kind": "street", "in_home": False}], "connections": [],
+                                              "layout": {"zone:rue": {"x": 0, "y": 0}}, "room_occupants": {"zone:rue": [amal.id]}})
+    assert ok["success"] and ok["result"]["options"]["room_occupants"] == {}

@@ -38,12 +38,14 @@ with sync_playwright() as p:
     b = p.chromium.launch(executable_path="/opt/pw-browsers/chromium", args=["--no-sandbox"])
     errors = []
 
-    def new(query="", w=1300, h=800):
+    def new(query="", w=1300, h=800, locked=False):
         pg = b.new_page(viewport={"width": w, "height": h})
         pg.on("pageerror", lambda e: errors.append(str(e)))
         pg.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
         pg.goto(base + query)
         pg.wait_for_function(f"{P}?.querySelector('.bar')")
+        if not locked:      # the panel opens locked; the tests that edit unlock it first
+            pg.locator("css=home-structure-panel >> [data-action=toggle-lock]").click()
         return pg
 
     def q(pg, sel):
@@ -225,6 +227,36 @@ with sync_playwright() as p:
     pg.screenshot(path=f"{OUT}/6-narrow-fr.png")
     q(pg, "[data-action=toggle-view]").click()
     ok(count(pg, ".plan") == 1, "can switch back to the plan")
+    pg.close()
+
+    # ---- lock: the panel opens locked, nothing changes until it is unlocked
+    pg = new("?legacy=1", locked=True)
+    pg.wait_for_function(f"{P}.querySelectorAll('.box').length === 2"); settle(pg)
+    n = pg.evaluate("window.__s.saves.length")
+    ok(q(pg, "[data-action=toggle-lock]").get_attribute("aria-pressed") == "true", "panel opens locked")
+    ok(q(pg, "[data-action=add-all]").is_disabled() and q(pg, "[data-action=reorganize]").is_disabled() and q(pg, "[data-action=add-zone]").is_disabled(), "bar actions are disabled while locked")
+    before = box(pg, "area:salon")
+    pg.mouse.move(before["x"] + 20, before["y"] + 20); pg.mouse.down(); pg.mouse.move(before["x"] + 200, before["y"] + 120, steps=6); pg.mouse.up()
+    after = box(pg, "area:salon")
+    ok(after["x"] == before["x"] and after["y"] == before["y"] and pg.evaluate("window.__s.saves.length") == n, "a box cannot be dragged while locked")
+    q(pg, ".tray li >> nth=0").click()
+    ok(count(pg, ".box") == 2 and pg.evaluate("window.__s.saves.length") == n, "the tray adds nothing while locked")
+    q(pg, "[data-space='area:salon']").click()
+    ok(count(pg, "[data-drawer=space]") == 1 and pg.evaluate(f"{P}.querySelector('fieldset.lockable').disabled"), "a room can be selected but its drawer is read-only")
+    ok(count(pg, "[data-lockhint]") == 1, "the drawer says it is locked")
+    q(pg, "[data-action=toggle-lock]").click()
+    ok(not pg.evaluate(f"{P}.querySelector('fieldset.lockable').disabled") and q(pg, "[data-action=add-all]").is_enabled(), "unlocking enables editing")
+    # ---- usual occupants
+    ok(count(pg, ".occupant") == 2, "a room lists the users")
+    q(pg, ".occupant[data-user=u2]").check(); settle(pg)
+    ok(pg.evaluate("window.__s.saves.at(-1).room_occupants['area:salon']") == ["u2"], "ticking a user saves them as occupant")
+    q(pg, ".occupant[data-user=u1]").check(); settle(pg)
+    q(pg, ".occupant[data-user=u2]").uncheck(); settle(pg)
+    ok(pg.evaluate("window.__s.saves.at(-1).room_occupants['area:salon']") == ["u1"], "unticking removes only that user")
+    q(pg, ".occupant[data-user=u1]").uncheck(); settle(pg)
+    ok(pg.evaluate("'area:salon' in window.__s.saves.at(-1).room_occupants") is False, "a room with nobody has no entry")
+    q(pg, "[data-action=toggle-lock]").click()
+    ok(q(pg, "[data-action=undo]").is_disabled(), "locking again disables undo")
     pg.close()
 
     ok(not errors, f"no console errors {errors[:3]}")

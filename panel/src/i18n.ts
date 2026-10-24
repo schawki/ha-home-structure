@@ -50,6 +50,9 @@ const EN = {
   deleteTitle: "Delete the group “{name}”?", deleteText: "Only the group is deleted; its rooms and sensors are not affected.", delete: "Delete",
   prunedNotice: "Some sensors were removed from a group because they are no longer in its rooms.",
   close: "Close", list: "List", plan: "Plan",
+  lockLocked: "Locked", lockUnlocked: "Unlocked", lockUnlockTitle: "The plan is locked. Click to unlock it and make changes.", lockLockTitle: "Click to lock the plan again.",
+  planLockedHint: "The plan is locked. Unlock it to make changes.",
+  occupantsTitle: "Usual occupants", occupantsHint: "The people who usually use this room. Other integrations, such as a dashboard, can read this.", noUsers: "No user found.",
 } as const;
 export type Key = keyof typeof EN;
 type Dict = Record<Key, string>;
@@ -105,6 +108,9 @@ const FR: Dict = {
   deleteTitle: "Supprimer le groupe « {name} » ?", deleteText: "Seul le groupe est supprimé ; ses pièces et ses capteurs ne sont pas touchés.", delete: "Supprimer",
   prunedNotice: "Des capteurs ont été retirés d'un groupe parce qu'ils ne sont plus dans ses pièces.",
   close: "Fermer", list: "Liste", plan: "Plan",
+  lockLocked: "Verrouillé", lockUnlocked: "Déverrouillé", lockUnlockTitle: "Le plan est verrouillé. Cliquez pour le déverrouiller et le modifier.", lockLockTitle: "Cliquez pour verrouiller de nouveau le plan.",
+  planLockedHint: "Le plan est verrouillé. Déverrouillez-le pour faire des modifications.",
+  occupantsTitle: "Occupants habituels", occupantsHint: "Les personnes qui utilisent habituellement cette pièce. D'autres intégrations, comme un tableau de bord, peuvent le lire.", noUsers: "Aucun utilisateur trouvé.",
 };
 
 const LANGS: Record<string, Dict> = { en: EN as unknown as Dict, fr: FR };

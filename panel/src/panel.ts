@@ -25,6 +25,7 @@ class HomeStructurePanel extends LitElement {
   @state() private listMode: boolean | null = null;
   @state() private failed = false;
   @state() private tab: "plan" | "groups" = "plan";
+  @state() private locked = true;          // the plan is locked each time the panel is opened: nothing changes until the user unlocks it
   private chain: Promise<unknown> = Promise.resolve();
   private candFor = "";
 
@@ -36,6 +37,7 @@ class HomeStructurePanel extends LitElement {
 
   connectedCallback(): void {
     super.connectedCallback();
+    this.locked = true;
     void this.load();
   }
 
@@ -44,7 +46,7 @@ class HomeStructurePanel extends LitElement {
     try {
       const boot = await this.hass.callWS<Bootstrap>({ type: "home_structure/get" });
       this.boot = boot;
-      this.opts = { ...boot.options, room_types: boot.options.room_types ?? {} };
+      this.opts = { ...boot.options, room_types: boot.options.room_types ?? {}, room_occupants: boot.options.room_occupants ?? {} };
       this.placeLegacy();
     } catch {
       this.failed = true;
@@ -80,6 +82,7 @@ class HomeStructurePanel extends LitElement {
   }
 
   private commit(next: Options, select?: Selection | undefined): void {
+    if (this.locked) return;
     this.history = [...this.history.slice(-49), clone(this.opts)];
     this.opts = next;
     if (select !== undefined) this.selection = select;
@@ -88,7 +91,7 @@ class HomeStructurePanel extends LitElement {
 
   private undo(): void {
     const prev = this.history.at(-1);
-    if (!prev) return;
+    if (!prev || this.locked) return;
     this.history = this.history.slice(0, -1);
     this.opts = prev;
     if (this.selection && !this.exists(this.selection)) this.selection = null;
@@ -132,6 +135,7 @@ class HomeStructurePanel extends LitElement {
     const o = clone(this.opts);
     delete o.layout[id];
     delete o.room_types[id];
+    delete o.room_occupants[id];
     o.zones = o.zones.filter((z) => z.id !== id);
     o.connections = o.connections.filter((c) => c.a !== id && c.b !== id);
     this.commit(o, null);
@@ -154,6 +158,7 @@ class HomeStructurePanel extends LitElement {
     const o = clone(this.opts);
     const isArea = s.id.startsWith("area:");
     delete o.room_types[s.id];
+    if (kind !== "room") delete o.room_occupants[s.id];       // only an ordinary room has usual occupants
     if (isArea && kind === "room") {
       o.zones = o.zones.filter((z) => z.id !== s.id);
     } else {
@@ -182,6 +187,14 @@ class HomeStructurePanel extends LitElement {
     const z = o.zones.find((x) => x.id === s.id);
     if (!z) return;
     z.in_home = value;
+    this.commit(o);
+  }
+
+  private setOccupant(s: Space, userId: string, on: boolean): void {
+    const o = clone(this.opts);
+    const list = new Set(o.room_occupants[s.id] ?? []);
+    if (on) list.add(userId); else list.delete(userId);
+    if (list.size) o.room_occupants[s.id] = [...list]; else delete o.room_occupants[s.id];
     this.commit(o);
   }
 
@@ -265,6 +278,7 @@ class HomeStructurePanel extends LitElement {
   private boxDown(e: PointerEvent, s: Space): void {
     if ((e.target as HTMLElement).closest(".handle")) return;
     e.preventDefault();
+    if (this.locked) { this.selection = { kind: "space", id: s.id }; return; }       // locked: a click only selects, nothing can be dragged
     const start = this.planPoint(e);
     const grab = { x: start.x - s.pos.x, y: start.y - s.pos.y };
     let moved = false;
@@ -294,6 +308,7 @@ class HomeStructurePanel extends LitElement {
   private handleDown(e: PointerEvent, s: Space): void {
     e.preventDefault();
     e.stopPropagation();
+    if (this.locked) return;
     const p0 = this.planPoint(e);
     this.linking = { from: s.id, x: p0.x, y: p0.y };
     const move = (ev: PointerEvent): void => {
@@ -315,7 +330,7 @@ class HomeStructurePanel extends LitElement {
   private drop(e: DragEvent): void {
     e.preventDefault();
     const id = e.dataTransfer?.getData("text/plain");
-    if (!id || !this.boot?.areas.some((a) => a.id === id)) return;
+    if (this.locked || !id || !this.boot?.areas.some((a) => a.id === id)) return;
     const p = this.planPoint(e);
     this.placeArea(id, { x: Math.max(0, Math.round(p.x - BOX_W / 2)), y: Math.max(0, Math.round(p.y - BOX_H / 2)) });
   }
@@ -348,8 +363,8 @@ class HomeStructurePanel extends LitElement {
     return html`<section class="tray" aria-label=${this.t("trayTitle")}>
       <h2>${this.t("trayTitle")}</h2>
       <p class="muted">${this.t("trayHelp")}</p>
-      ${tray.length ? html`<button class="plain" data-action="add-all" @click=${this.addAll}>${this.t("addAll")}</button>` : nothing}
-      <ul>${tray.map((a) => html`<li draggable="true" data-area=${a.id} @dragstart=${(e: DragEvent) => e.dataTransfer?.setData("text/plain", a.id)} @click=${() => this.placeArea(a.id)}>
+      ${tray.length ? html`<button class="plain" data-action="add-all" ?disabled=${this.locked} @click=${this.addAll}>${this.t("addAll")}</button>` : nothing}
+      <ul>${tray.map((a) => html`<li draggable=${this.locked ? "false" : "true"} data-area=${a.id} @dragstart=${(e: DragEvent) => e.dataTransfer?.setData("text/plain", a.id)} @click=${() => this.placeArea(a.id)}>
         <span>${a.name}</span><small>${this.floorLabel(a)}</small></li>`)}</ul>
       ${tray.length ? nothing : html`<p class="muted">${this.t("trayEmpty")}</p>`}
     </section>`;
@@ -421,6 +436,8 @@ class HomeStructurePanel extends LitElement {
     const locks = this.cands?.locks ?? [];
     return html`<aside class="drawer" data-drawer="link">
       <header><h2>${names.get(c.a)} ↔ ${names.get(c.b)}</h2><button class="x" @click=${() => (this.selection = null)} aria-label=${this.t("close")}>×</button></header>
+      ${this.lockHint()}
+      <fieldset class="lockable" ?disabled=${this.locked}>
       <h3>${this.t("separations")}</h3>
       ${c.separations.map((s) => {
         const permanent = !!this.boot!.permanent[s.type];
@@ -447,6 +464,7 @@ class HomeStructurePanel extends LitElement {
       })}
       <button class="plain" data-action="add-sep" @click=${() => this.editConn(c.id, (x) => x.separations.push({ id: newId(), type: "door" }))}>${this.t("addSeparation")}</button>
       <button class="plain danger" data-action="remove-link" @click=${() => { const id = c.id; const o = clone(this.opts); o.connections = o.connections.filter((x) => x.id !== id); this.commit(o, null); }}>${this.t("removeLink")}</button>
+      </fieldset>
     </aside>`;
   }
 
@@ -463,6 +481,8 @@ class HomeStructurePanel extends LitElement {
     const current = s.kind === "room" ? s.room_type ?? "" : s.kind;
     return html`<aside class="drawer" data-drawer="space">
       <header><h2>${s.name}</h2><button class="x" @click=${() => (this.selection = null)} aria-label=${this.t("close")}>×</button></header>
+      ${this.lockHint()}
+      <fieldset class="lockable" ?disabled=${this.locked}>
       ${isArea ? html`<p class="muted">${s.area ? this.floorLabel(s.area) : ""}</p>`
         : html`<label>${this.t("zoneName")}<input class="name" .value=${s.name} @change=${(e: Event) => this.renameZone(s, (e.target as HTMLInputElement).value)}></label>`}
       <label>${this.t("zoneKind")}<select class="kind" .value=${current} @change=${(e: Event) => this.setType(s, (e.target as HTMLSelectElement).value)}>
@@ -470,12 +490,27 @@ class HomeStructurePanel extends LitElement {
         ${groups.map((g) => html`<optgroup label=${g.label}>${g.options.map((o) => html`<option value=${o.value} ?selected=${o.value === current}>${o.label}</option>`)}</optgroup>`)}
         <optgroup label=${this.t("groupOutside")}>${outside.map((o) => html`<option value=${o.value} ?selected=${o.value === current}>${o.label}</option>`)}</optgroup></select></label>
       ${s.kind === "room" ? nothing : html`<label class="check"><input type="checkbox" class="inhome" .checked=${s.in_home} @change=${(e: Event) => this.setInHome(s, (e.target as HTMLInputElement).checked)}>${this.t("partOfHome")}</label>`}
+      ${s.kind === "room" && isArea ? this.renderOccupants(s) : nothing}
       <h3>${this.t("connections")}</h3>
       ${mine.length ? html`<ul class="neigh">${mine.map((c) => html`<li data-neighbour=${c.id} @click=${() => (this.selection = { kind: "link", id: c.id })}>
         <span>${names.get(c.a === s.id ? c.b : c.a)}</span>${c.separations.map((x) => this.chip(x))}</li>`)}</ul>` : html`<p class="muted">${this.t("noConnections")}</p>`}
       ${others.length ? this.select("", [{ value: "", label: this.t("connectTo") }, ...others.map((o) => ({ value: o.id, label: o.name }))], (v) => v && this.connect(s.id, v), "connect") : nothing}
       <button class="plain danger" data-action=${isArea ? "to-tray" : "delete-zone"} @click=${() => this.removeFromPlan(s.id)}>${this.t(isArea ? "removeFromPlan" : "deleteZone")}</button>
+      </fieldset>
     </aside>`;
+  }
+
+  /** The users who usually use this room: other integrations (a dashboard, an alarm…) read them with the service `get_occupants`. */
+  private renderOccupants(s: Space) {
+    const users = this.boot!.users ?? [];
+    const mine = new Set(this.opts.room_occupants[s.id] ?? []);
+    return html`<h3>${this.t("occupantsTitle")}</h3>
+      ${users.length ? html`<div class="occupants" data-occupants=${s.id}>${users.map((u) => html`<label class="check"><input type="checkbox" class="occupant" data-user=${u.id} .checked=${mine.has(u.id)} @change=${(e: Event) => this.setOccupant(s, u.id, (e.target as HTMLInputElement).checked)}>${u.name}</label>`)}</div>
+        <p class="muted">${this.t("occupantsHint")}</p>` : html`<p class="muted">${this.t("noUsers")}</p>`}`;
+  }
+
+  private lockHint() {
+    return this.locked ? html`<p class="muted lockhint" data-lockhint>🔒 ${this.t("planLockedHint")}</p>` : nothing;
   }
 
   private renderDrawer() {
@@ -521,13 +556,14 @@ class HomeStructurePanel extends LitElement {
         </nav>
         ${plan ? html`<span class="status ${this.status}" role="status" data-status=${this.status}>${this.statusText()}</span>
         <span class="grow"></span>
-        <button class="barbtn" data-action="undo" ?disabled=${!this.history.length} @click=${this.undo}>↶ ${t("undo")}</button>
-        <button class="barbtn" data-action="reorganize" @click=${this.reorganize}>${t("reorganize")}</button>
-        <button class="barbtn" data-action="add-zone" @click=${() => (this.zoneForm = { kind: "garden", name: this.kindLabel("garden"), in_home: this.boot!.in_home.garden ?? true })}>${t("addZone")}</button>
+        <button class="barbtn lock ${this.locked ? "on" : ""}" data-action="toggle-lock" aria-pressed=${this.locked} title=${this.locked ? t("lockUnlockTitle") : t("lockLockTitle")} @click=${() => (this.locked = !this.locked)}>${this.locked ? `🔒 ${t("lockLocked")}` : `🔓 ${t("lockUnlocked")}`}</button>
+        <button class="barbtn" data-action="undo" ?disabled=${this.locked || !this.history.length} @click=${this.undo}>↶ ${t("undo")}</button>
+        <button class="barbtn" data-action="reorganize" ?disabled=${this.locked} @click=${this.reorganize}>${t("reorganize")}</button>
+        <button class="barbtn" data-action="add-zone" ?disabled=${this.locked} @click=${() => (this.zoneForm = { kind: "garden", name: this.kindLabel("garden"), in_home: this.boot!.in_home.garden ?? true })}>${t("addZone")}</button>
         <button class="barbtn" data-action="toggle-view" @click=${() => (this.listMode = !list)}>${list ? t("plan") : t("list")}</button>` : nothing}
       </div>
       ${plan ? html`${this.renderZoneForm()}
-      <div class="cols ${list ? "list" : ""}">
+      <div class="cols ${list ? "list" : ""} ${this.locked ? "locked" : ""}">
         ${this.renderTray()}
         <main>${list ? this.renderList() : this.renderPlan()}</main>
         ${this.renderDrawer()}
@@ -544,6 +580,11 @@ class HomeStructurePanel extends LitElement {
     .status { font-size: .85rem; opacity: .9; margin-left: 8px; } .status.error { font-weight: 600; }
     .barbtn { font: inherit; color: inherit; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.35); border-radius: 6px; padding: 5px 12px; cursor: pointer; }
     .barbtn:disabled { opacity: .45; cursor: default; }
+    .barbtn.lock.on { background: rgba(255,255,255,.28); font-weight: 500; }
+    fieldset.lockable { border: 0; padding: 0; margin: 0; min-width: 0; } fieldset.lockable:disabled { opacity: .7; }
+    .lockhint { margin-top: 0; }
+    .cols.locked .box { cursor: pointer; } .cols.locked .handle { display: none; } .cols.locked .tray li { cursor: default; }
+    .occupants { display: grid; gap: 2px; }
     .msg { padding: 24px; }
     .cols { display: grid; grid-template-columns: 240px minmax(0, 1fr) 320px; gap: 12px; padding: 12px; align-items: start; }
     .cols.list { grid-template-columns: 1fr; }

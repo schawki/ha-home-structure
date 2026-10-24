@@ -21,7 +21,7 @@ def test_the_structure_keeps_the_keys_consumers_read():
     out = structure()
     assert {"spaces", "connections", "layout"} <= set(out)
     for space in out["spaces"]:
-        assert {"id", "name", "kind", "in_home", "area_id", "room_type"} <= set(space)
+        assert {"id", "name", "kind", "in_home", "area_id", "room_type", "occupants"} <= set(space)
     assert {"id", "a", "b", "a_name", "b_name", "separations"} <= set(out["connections"][0])
     for sep in out["connections"][0]["separations"]:
         assert {"id", "type", "state", "position", "sensor", "entity_id", "shutter", "shutter_state", "shutter_position"} <= set(sep)

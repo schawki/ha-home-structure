@@ -20,7 +20,7 @@ def test_spaces_rooms_areas_with_a_kind_and_virtual_zones():
     assert by["area:salon"]["kind"] == "room" and by["area:salon"]["in_home"] is True
     assert by["area:jardin"]["kind"] == "garden" and by["area:jardin"]["in_home"] is True and by["area:jardin"]["name"] == "Jardin"
     assert by["area:hall"]["kind"] == "hall" and by["area:hall"]["in_home"] is False and by["area:hall"]["name"] == "Entrée (extérieur)"
-    assert by["zone:rue"] == {"id": "zone:rue", "name": "Rue", "kind": "street", "in_home": False, "area_id": None, "room_type": None}
+    assert by["zone:rue"] == {"id": "zone:rue", "name": "Rue", "kind": "street", "in_home": False, "area_id": None, "room_type": None, "occupants": []}
     assert len(by) == 5
 
 
@@ -232,3 +232,18 @@ def test_adjacency_levels_zones_and_isolated_areas():
     assert model.adjacency(out, "possible") == {"entree": ["salon"], "hall": [], "jardin": ["salon"], "salon": ["entree", "jardin"]}
     with pytest.raises(ValueError):
         model.adjacency(out, "none")
+
+
+def test_occupants_are_listed_validated_and_pruned():
+    data = {"zones": [{"id": "zone:rue", "name": "Rue", "kind": "street", "in_home": False}], "connections": [], "layout": {},
+            "room_occupants": {"area:a": ["u1", "u2"], "area:b": []}}
+    areas = [{"id": "a", "name": "A", "floor": None}, {"id": "b", "name": "B", "floor": None}]
+    spaces = {s["id"]: s for s in model.spaces(data, areas)}
+    assert spaces["area:a"]["occupants"] == ["u1", "u2"] and spaces["area:b"]["occupants"] == [] and spaces["zone:rue"]["occupants"] == []
+    assert model.validate(data, {"a", "b"}) == []
+    assert "invalid_occupants" in model.validate({**data, "room_occupants": {"zone:rue": ["u1"]}}, {"a", "b"})
+    assert "invalid_occupants" in model.validate({**data, "room_occupants": {"area:a": "u1"}}, {"a", "b"})
+    assert "invalid_occupants" in model.validate({**data, "room_occupants": {"area:zzz": ["u1"]}}, {"a", "b"})
+    model.prune_occupants(data, {"u1"})
+    built = {"spaces": model.spaces(data, areas)}
+    assert model.occupants(built) == {"a": ["u1"]} and model.rooms_of_users(model.occupants(built)) == {"u1": ["a"]}
