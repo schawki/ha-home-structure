@@ -59,10 +59,11 @@ def spaces(data: dict, areas: list[dict]) -> list[dict]:
         z = zones.get(sid)
         out.append({"id": sid, "name": (z or {}).get("name") or a["name"], "kind": z["kind"] if z else "room",
                     "in_home": z["in_home"] if z else True, "area_id": a["id"], "room_type": None if z else types.get(sid),
-                    "occupants": [] if z else list(usual.get(sid, []))})
+                    "occupants": [] if z else list(usual.get(sid, [])),
+                    "floor": a.get("floor"), "floor_level": a.get("floor_level")})
     for z in data.get("zones", []):
         if not z["id"].startswith("area:"):
-            out.append({"id": z["id"], "name": z["name"], "kind": z["kind"], "in_home": z["in_home"], "area_id": None, "room_type": None, "occupants": []})
+            out.append({"id": z["id"], "name": z["name"], "kind": z["kind"], "in_home": z["in_home"], "area_id": None, "room_type": None, "occupants": [], "floor": None, "floor_level": None})
     return out
 
 

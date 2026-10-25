@@ -240,7 +240,7 @@ def view(hass: HomeAssistant, spaces: list[dict], bridges: list[dict] | None, or
     for s in found:
         by_area.setdefault(s["area_id"], []).append(s)
     rooms = [{"id": sp["id"], "area_id": sp["area_id"], "name": sp["name"], "kind": sp["kind"], "occupants": sp.get("occupants", []),
-              "types": grouped(by_area.get(sp["area_id"], []), order.get(sp["area_id"]))} for sp in spaces if sp.get("area_id")]
+              "floor": sp.get("floor"), "floor_level": sp.get("floor_level"), "types": grouped(by_area.get(sp["area_id"], []), order.get(sp["area_id"]))} for sp in spaces if sp.get("area_id")]
     loose = [s for s in found if s["area_id"] is None]
     return {"rooms": rooms, "unassigned": sorted(loose, key=lambda s: (s["type"], s["name"].casefold())),
             "homekit": [{"title": f["title"], "mode": f["mode"]} for f in filters], "assistants": {"alexa": can["alexa"], "google": can["google"]},

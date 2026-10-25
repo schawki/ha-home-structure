@@ -26,6 +26,7 @@ class HomeStructureRooms extends LitElement {
   @state() private error = "";
   @state() private history: HistoryEntry[] = [];
   @state() private historyOpen = false;
+  @state() private open: string | null = null;      // the room being managed: one at a time, none at each opening
   private drag: { area: string; key: string; entity: string } | null = null;
   private t: T = translator("en");
 
@@ -186,14 +187,39 @@ class HomeStructureRooms extends LitElement {
   private renderRoom(r: RoomsView["rooms"][number]) {
     const t = this.t;
     const names = r.occupants.map((id) => this.users.find((u) => u.id === id)?.name).filter(Boolean).join(", ");
-    return html`<section class="room" data-room=${r.area_id}>
-      <header><h2>${r.name}</h2>${names ? html`<span class="muted occupants">${t("occupantsLabel")} ${names}</span>` : nothing}</header>
+    const isOpen = this.open === r.area_id;
+    const count = r.types.reduce((n, g) => n + g.sensors.length, 0);
+    return html`<section class="room ${isOpen ? "open" : ""}" data-room-row=${r.area_id}>
+      <header><button class="roomhead" data-action="toggle-room" aria-expanded=${isOpen} @click=${() => (this.open = isOpen ? null : r.area_id)}>
+        <span class="chev">${isOpen ? "▾" : "▸"}</span><h2>${r.name}</h2>
+        <span class="muted count">${count === 1 ? t("sensorCountOne") : t("sensorCount", { n: count })}</span>${names ? html`<span class="muted occupants">${t("occupantsLabel")} ${names}</span>` : nothing}</button></header>
+      ${isOpen ? this.roomBody(r) : nothing}
+    </section>`;
+  }
+
+  private roomBody(r: RoomsView["rooms"][number]) {
+    const t = this.t;
+    return html`<div class="body" data-room=${r.area_id}>
       ${r.types.length ? r.types.map((g) => html`<div class="type" data-type=${g.type}>
           <h3>${this.typeName(g.domain, g.type)}${g.saved && !this.locks.order ? html` <button class="link" data-action="reset-order" @click=${() => void this.saveOrder(r.area_id, g.key, [])}>${t("autoOrder")}</button>` : nothing}</h3>
           <ul>${g.sensors.map((s, i) => this.sensor(s, g, i, r.area_id))}</ul>
           ${g.assist_first === false ? html`<p class="muted note" data-note="not-first">ⓘ ${t("notFirst")}</p>` : nothing}
         </div>`) : html`<p class="muted">${t("noSensorsInRoom")}</p>`}
-    </section>`;
+    </div>`;
+  }
+
+  /** The rooms by floor (lowest first, the rooms with no floor last), each floor with its title when the home has several. */
+  private renderFloors(rooms: RoomsView["rooms"]) {
+    const groups = new Map<string, { name: string | null; level: number | null; rooms: RoomsView["rooms"] }>();
+    for (const r of rooms) {
+      const k = r.floor ?? "";
+      if (!groups.has(k)) groups.set(k, { name: r.floor ?? null, level: r.floor_level ?? null, rooms: [] });
+      groups.get(k)!.rooms.push(r);
+    }
+    const list = [...groups.values()].sort((a, b) => (a.name === null ? 1 : 0) - (b.name === null ? 1 : 0) || (a.level ?? 1e9) - (b.level ?? 1e9) || (a.name ?? "").localeCompare(b.name ?? ""));
+    const titled = list.length > 1;
+    return list.map((f) => html`<div class="floor" data-floor=${f.name ?? ""}>${titled ? html`<h3 class="floortitle">${f.name ?? this.t("roomsNoFloor")}</h3>` : nothing}
+      ${f.rooms.map((r) => this.renderRoom(r))}</div>`);
   }
 
   private lockBar() {
@@ -267,7 +293,7 @@ class HomeStructureRooms extends LitElement {
     const d = this.data;
     return html`<p class="muted intro">${t("roomsHelp")}${d.matter.available ? nothing : html` ${t("matterUnavailable")}`}</p>
       ${this.lockBar()}
-      ${d.rooms.length ? d.rooms.map((r) => this.renderRoom(r)) : html`<p class="muted" data-empty>${t("roomsEmpty")}</p>`}
+      ${d.rooms.length ? this.renderFloors(d.rooms) : html`<p class="muted" data-empty>${t("roomsEmpty")}</p>`}
       ${d.unassigned.length ? html`<details class="unassigned" data-unassigned>
         <summary>${t("unassignedTitle")} (${d.unassigned.length})</summary>
         <p class="muted">${t("unassignedHelp")}</p>
@@ -286,7 +312,10 @@ class HomeStructureRooms extends LitElement {
     .lock { font: inherit; font-size: .85rem; color: inherit; background: var(--card-background-color); border: 1px solid var(--divider-color); border-radius: 16px; padding: 4px 12px; cursor: pointer; }
     .lock.on { background: var(--secondary-background-color); } .lock:not(.on) { border-color: var(--primary-color); }
     .room, details { background: var(--card-background-color); border: 1px solid var(--divider-color); border-radius: 12px; padding: 4px 16px 12px; margin: 0 0 16px; }
-    .room header { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; } .room h2 { font-size: 1.1rem; font-weight: 500; margin: 12px 0 4px; }
+    .room { padding-bottom: 4px; margin-bottom: 8px; } .room.open { padding-bottom: 12px; }
+    .roomhead { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; width: 100%; font: inherit; color: inherit; background: none; border: 0; text-align: left; cursor: pointer; padding: 0; }
+    .roomhead h2 { font-size: 1.1rem; font-weight: 500; margin: 12px 0 8px; } .chev { width: 1em; color: var(--secondary-text-color); } .count { margin-left: auto; }
+    h3.floortitle { margin: 16px 4px 6px; }
     h3 { font-size: .8rem; font-weight: 500; text-transform: uppercase; letter-spacing: .04em; color: var(--secondary-text-color); margin: 12px 0 2px; }
     ul { list-style: none; margin: 0; padding: 0; }
     li { display: flex; align-items: center; gap: 12px; padding: 6px 0; border-top: 1px solid var(--divider-color); flex-wrap: wrap; } li:first-child { border-top: 0; } li[draggable=true] { cursor: grab; }

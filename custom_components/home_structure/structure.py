@@ -11,8 +11,9 @@ from .const import DOMAIN
 
 def areas(hass: HomeAssistant) -> list[dict]:
     """Every Home Assistant area, with the name of its floor (None when it has none)."""
-    floors = {f.floor_id: f.name for f in fr.async_get(hass).async_list_floors()}
-    return sorted(({"id": a.id, "name": a.name, "floor": floors.get(a.floor_id)} for a in ar.async_get(hass).async_list_areas()),
+    floors = {f.floor_id: f for f in fr.async_get(hass).async_list_floors()}
+    return sorted(({"id": a.id, "name": a.name, "floor": floors[a.floor_id].name if a.floor_id in floors else None,
+                    "floor_level": floors[a.floor_id].level if a.floor_id in floors else None} for a in ar.async_get(hass).async_list_areas()),
                   key=lambda a: a["name"].casefold())
 
 

@@ -20,7 +20,7 @@ def test_spaces_rooms_areas_with_a_kind_and_virtual_zones():
     assert by["area:salon"]["kind"] == "room" and by["area:salon"]["in_home"] is True
     assert by["area:jardin"]["kind"] == "garden" and by["area:jardin"]["in_home"] is True and by["area:jardin"]["name"] == "Jardin"
     assert by["area:hall"]["kind"] == "hall" and by["area:hall"]["in_home"] is False and by["area:hall"]["name"] == "Entrée (extérieur)"
-    assert by["zone:rue"] == {"id": "zone:rue", "name": "Rue", "kind": "street", "in_home": False, "area_id": None, "room_type": None, "occupants": []}
+    assert by["zone:rue"] == {"id": "zone:rue", "name": "Rue", "kind": "street", "in_home": False, "area_id": None, "room_type": None, "occupants": [], "floor": None, "floor_level": None}
     assert len(by) == 5
 
 

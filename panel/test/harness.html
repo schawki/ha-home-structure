@@ -54,7 +54,7 @@
     });
   };
   const R = {
-    room_sensors: () => ({ rooms: [{ id: "area:salon", area_id: "salon", name: "Salon", kind: "room", occupants: ["u2"], types: groupsOf("salon") }, { id: "area:cuisine", area_id: "cuisine", name: "Cuisine", kind: "room", occupants: [], types: groupsOf("cuisine") }],
+    room_sensors: () => ({ rooms: [{ id: "area:salon", area_id: "salon", name: "Salon", kind: "room", occupants: ["u2"], floor: "Ground floor", floor_level: 0, types: groupsOf("salon") }, { id: "area:cuisine", area_id: "cuisine", name: "Cuisine", kind: "room", occupants: [], floor: "First floor", floor_level: 1, types: groupsOf("cuisine") }],
       unassigned: S.sensors.filter((x) => !x.area_id), homekit: [{ title: "Bridge", mode: "bridge" }], assistants: { alexa: !!q.get("alexa"), google: !!q.get("alexa") }, matter: { available: !q.get("nomatter"), bridges: q.get("nomatter") ? [] : ["Hub"] } }),
     exposure_set: (m) => { if (q.get("failwrite")) throw { code: "changed_since", message: "x" }; const x = S.sensors.find((y) => y.entity_id === m.entity_id); const [k, v] = Object.entries(m.changes)[0]; const f = k === "conversation" ? "assist" : k;
       const before = { [k]: x[f] }; x[f] = v; S.writes.push(["exposure", m.entity_id, k, v]); return stamp({ kind: "exposure", entity_id: m.entity_id, before, after: { [k]: v } }); },
