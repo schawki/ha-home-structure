@@ -353,7 +353,7 @@ class HomeStructureGroups extends LitElement {
 
   private renderUngrouped() {
     const rest = ungrouped(this.areas, this.groups);
-    if (!rest.length || !this.groups.length) return nothing;
+    if (!rest.length) return nothing;
     return html`<section class="group ungrouped" data-group="">
       <header><h2>${this.t("ungrouped")}</h2></header>
       <div class="cards">${rest.map((a) => this.renderCard(a, null))}</div></section>`;

@@ -82,7 +82,7 @@ with sync_playwright() as p:
 
     # ---- empty: hint, no group, + Add
     pg = new("")
-    ok(n(pg, "[data-empty]") == 1 and n(pg, ".group") == 0, "no group yet: the hint is shown")
+    ok(n(pg, "[data-empty]") == 1 and n(pg, ".group:not(.ungrouped)") == 0 and n(pg, ".ungrouped [data-room]") >= 1, "no group yet: the hint is shown and every room is under Not in any group")
     ok(n(pg, "[data-action=add]") == 1 and n(pg, "[data-action=page-menu]") == 0, "the + Add button is there, no page menu with fewer than two groups")
     pg.screenshot(path=f"{OUT}/g1-empty.png")
 

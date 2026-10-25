@@ -93,9 +93,9 @@ var Tt=Object.defineProperty;var Ot=Object.getOwnPropertyDescriptor;var u=(l,r,e
         ${this.reorderGroups?c`<span class="grip" role="button" tabindex="0" data-action="group-handle" aria-label=${this.t("moveItem")} @keydown=${a=>this.handleKey(a,"group","",e.id)}>⋮⋮</span>`:o?c`<button class="textbtn" data-action="rooms-done" @click=${()=>this.reorderRooms=null}>${this.t("done")}</button>`:this.menuButton({kind:"group",gid:e.id},"group-menu")}
       </header>
       ${this.reorderGroups?d:c`<div class="cards">${Z(s,a=>a.id,a=>this.renderCard(a,e))}${s.length?d:c`<p class="muted">${this.t("emptyGroup")}</p>`}</div>`}
-    </section>`}shownGroups(){let e=this.drag;return e?.kind==="group"?e.order.flatMap(t=>this.groups.filter(s=>s.id===t)):this.groups}renderUngrouped(){let e=xt(this.areas,this.groups);return!e.length||!this.groups.length?d:c`<section class="group ungrouped" data-group="">
+    </section>`}shownGroups(){let e=this.drag;return e?.kind==="group"?e.order.flatMap(t=>this.groups.filter(s=>s.id===t)):this.groups}renderUngrouped(){let e=xt(this.areas,this.groups);return e.length?c`<section class="group ungrouped" data-group="">
       <header><h2>${this.t("ungrouped")}</h2></header>
-      <div class="cards">${e.map(t=>this.renderCard(t,null))}</div></section>`}field(e,t,s,o,i={}){return c`<label class="field"><span class="flabel">${e}</span>
+      <div class="cards">${e.map(t=>this.renderCard(t,null))}</div></section>`:d}field(e,t,s,o,i={}){return c`<label class="field"><span class="flabel">${e}</span>
       <input class=${t} type=${i.type??"text"} placeholder=${i.placeholder??""} ?disabled=${i.disabled} .value=${s} @input=${a=>o(a.target.value)}></label>`}renderIconField(e){let t=e.icon.trim();return customElements.get("ha-icon-picker")?c`<ha-icon-picker class="gicon" .hass=${this.hass} .label=${this.t("gicon")} .value=${e.icon} @value-changed=${o=>this.patch({icon:o.detail.value??""})}></ha-icon-picker>`:c`<label class="field withicon"><span class="lead">${t?c`<ha-icon .icon=${t}></ha-icon>`:d}</span>
       <span class="flabel">${this.t("gicon")}</span>
       <input class="gicon" placeholder="mdi:sofa-outline" .value=${e.icon} @input=${o=>this.patch({icon:o.target.value})}>
