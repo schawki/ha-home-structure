@@ -21,5 +21,8 @@ export interface Sensor { entity_id: string; name: string; state: string }
 export interface Candidates { sensors: Sensor[]; filtered: boolean; locks: Sensor[]; locks_filtered: boolean }
 export interface Space { id: string; name: string; kind: string; room_type: string | null; in_home: boolean; area: Area | null; zone: Zone | null; pos: Pos }
 export interface HassState { state: string; attributes: Record<string, unknown> }
-export interface Hass { language: string; states: Record<string, HassState>; callWS<T>(msg: Record<string, unknown>): Promise<T> }
+export interface Hass { language: string; states: Record<string, HassState>; callWS<T>(msg: Record<string, unknown>): Promise<T>; fetchWithAuth?(path: string, init?: RequestInit): Promise<Response>; auth?: { data?: { access_token?: string } } }
 export type SepState = "open" | "closed" | "partial" | "unknown";
+export interface Floor { floor_id: string; name: string; icon: string | null; level: number | null; aliases: string[] }
+export interface AreaReg { area_id: string; name: string; icon: string | null; floor_id: string | null; labels: string[]; aliases: string[]; picture: string | null }
+export interface Label { label_id: string; name: string; icon: string | null; color: string | null }

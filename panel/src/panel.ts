@@ -1,7 +1,7 @@
 import { LitElement, css, html, nothing, svg } from "lit";
 import { property, state } from "lit/decorators.js";
 import "./groups";
-import "./rooms";
+import "./floors";
 import { translator } from "./i18n";
 import type { Key, T } from "./i18n";
 import { BOX_H, BOX_W, autoLayout, clone, connOf, newId, nextFree, placedSpaces, sepState, shutterState, slug, trayAreas } from "./logic";
@@ -569,7 +569,7 @@ class HomeStructurePanel extends LitElement {
         ${this.renderTray()}
         <main>${list ? this.renderList() : this.renderPlan()}</main>
         ${this.renderDrawer()}
-      </div>` : this.tab === "rooms" ? html`<home-structure-rooms .hass=${this.hass}></home-structure-rooms>` : html`<home-structure-groups .hass=${this.hass}></home-structure-groups>`}`;
+      </div>` : this.tab === "rooms" ? html`<home-structure-floors .hass=${this.hass}></home-structure-floors>` : html`<home-structure-groups .hass=${this.hass}></home-structure-groups>`}`;
   }
 
   static styles = css`

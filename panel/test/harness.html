@@ -77,6 +77,7 @@
   const hass = {
     language: q.get("lang") || "en",
     states: { "binary_sensor.porte": { state: "off", attributes: {} }, "cover.volet": { state: "open", attributes: { current_position: 40 } } },
+    async fetchWithAuth(path, init) { (window.__uploads ||= []).push(path); if (q.get("failupload")) return { ok: false, status: 500 }; return { ok: true, json: async () => ({ id: "img1" }) }; },
     async callWS(msg) {
       S.calls.push(msg.type);
       if (msg.type === "home_structure/get") return { areas, users: S.users ?? [{ id: "u1", name: "Amal" }, { id: "u2", name: "Karim" }], options: JSON.parse(JSON.stringify(S.options)), kinds, types: ["open_space", "opening", "door", "glass_door", "grille", "window", "shutter", "wall"], in_home: inHome, permanent: { open_space: "open", opening: "open", wall: "closed" }, sensor_domains: ["binary_sensor", "cover"], shutter_hosts: ["door", "glass_door", "window"], lock_hosts: ["door", "glass_door", "grille"], passage_levels: ["none", "possible", "normal"], passage_by_type: { open_space: "normal", opening: "normal", door: "normal", glass_door: "normal", grille: "normal", window: "possible", shutter: "possible", wall: "none" }, passage_ambiguous: ["grille", "window", "shutter"], room_type_groups: RTG, room_types: Object.values(RTG).flat() };
@@ -95,6 +96,30 @@
       }
       if (msg.type === "home_structure/group_sensors") return { sensors: SENSORS[msg.kind].filter((s) => msg.area_ids.includes(s[0])).map((s) => ({ entity_id: s[1], name: s[2], state: s[3], unit: s[4], area_id: s[0], area: areas.find((a) => a.id === s[0]).name })) };
       if (msg.type === "home_structure/candidates") return { sensors: [{ entity_id: "binary_sensor.porte", name: "Porte", state: "off" }, { entity_id: "cover.volet", name: "Volet", state: "open" }], filtered: true, locks: [{ entity_id: "lock.porte", name: "Serrure", state: "locked" }], locks_filtered: true };
+      if (msg.type.startsWith("config/")) {
+        const G = (window.__reg ||= { floors: [{ floor_id: "ground", name: "Ground floor", icon: "mdi:home", level: 0, aliases: [] }, { floor_id: "first", name: "First floor", icon: null, level: 1, aliases: [] }],
+          areas: [{ area_id: "salon", name: "Salon", icon: "mdi:sofa", floor_id: "ground", labels: ["l1"], aliases: ["Living"], picture: null }, { area_id: "cuisine", name: "Cuisine", icon: null, floor_id: "first", labels: [], aliases: [], picture: null },
+            { area_id: "cave", name: "Cave", icon: null, floor_id: null, labels: [], aliases: [], picture: null }], labels: [{ label_id: "l1", name: "Favori", icon: null, color: "red" }], log: [] });
+        G.log.push(msg);
+        const [, reg, op] = msg.type.split("/");
+        if (q.get("failreg") && op !== "list") throw { message: "registry refused" };
+        if (reg === "floor_registry") {
+          if (op === "list") return JSON.parse(JSON.stringify(G.floors));
+          if (op === "create") { const f = { floor_id: msg.name.toLowerCase().replace(/[^a-z0-9]+/g, "_"), name: msg.name, icon: msg.icon, level: msg.level, aliases: msg.aliases }; G.floors.push(f); return f; }
+          if (op === "update") { Object.assign(G.floors.find((f) => f.floor_id === msg.floor_id), { name: msg.name, icon: msg.icon, level: msg.level, aliases: msg.aliases }); return {}; }
+          if (op === "reorder") { G.floors = msg.floor_ids.map((i) => G.floors.find((f) => f.floor_id === i)); return null; }
+        }
+        if (reg === "area_registry") {
+          if (op === "list") return JSON.parse(JSON.stringify(G.areas));
+          if (op === "create") { const a = { area_id: msg.name.toLowerCase().replace(/[^a-z0-9]+/g, "_"), name: msg.name, icon: msg.icon ?? null, floor_id: msg.floor_id ?? null, labels: msg.labels, aliases: msg.aliases, picture: msg.picture }; G.areas.push(a); return a; }
+          if (op === "update") { const a = G.areas.find((x) => x.area_id === msg.area_id); ["name", "icon", "floor_id", "labels", "aliases", "picture"].forEach((k) => (a[k] = msg[k])); return a; }
+          if (op === "reorder") { G.areas = msg.area_ids.map((i) => G.areas.find((a) => a.area_id === i)); return null; }
+        }
+        if (reg === "label_registry") {
+          if (op === "list") return JSON.parse(JSON.stringify(G.labels));
+          if (op === "create") { const l = { label_id: "l" + (G.labels.length + 1), name: msg.name, icon: null, color: null }; G.labels.push(l); return l; }
+        }
+      }
       throw new Error("unknown " + msg.type);
     },
   };

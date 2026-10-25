@@ -18,6 +18,7 @@ type Dialog =
 class HomeStructureRooms extends LitElement {
   @property({ attribute: false }) hass!: Hass;
   @state() private data: RoomsView | null = null;
+  @property() area = "";      // the room this page shows
   @state() private users: User[] = [];
   @state() private failed = false;
   @state() private locks: Record<Lock, boolean> = { assist: true, move: true, order: true };      // every section is locked at each opening
@@ -28,7 +29,6 @@ class HomeStructureRooms extends LitElement {
   @state() private historyOpen = false;
   @state() private showSounds = false;      // sound detections and the sensors that do not describe a room are hidden at each opening
   @state() private showOther = false;
-  @state() private open: string | null = null;      // the room being managed: one at a time, none at each opening
   private drag: { area: string; key: string; entity: string } | null = null;
   private t: T = translator("en");
 
@@ -218,20 +218,6 @@ class HomeStructureRooms extends LitElement {
       </select>${why ? html`<span class="muted why">${why}</span>` : nothing}</label>`;
   }
 
-  private renderRoom(r: RoomsView["rooms"][number]) {
-    const t = this.t;
-    const names = r.occupants.map((id) => this.users.find((u) => u.id === id)?.name).filter(Boolean).join(", ");
-    const isOpen = this.open === r.area_id;
-    const all = r.types.flatMap((g) => g.sensors);
-    const count = all.filter((s) => this.listed(s)).length, masked = this.hiddenIn(all);
-    return html`<section class="room ${isOpen ? "open" : ""}" data-room-row=${r.area_id}>
-      <header><button class="roomhead" data-action="toggle-room" aria-expanded=${isOpen} @click=${() => (this.open = isOpen ? null : r.area_id)}>
-        <span class="chev">${isOpen ? "▾" : "▸"}</span><h2>${r.name}</h2>
-        <span class="muted count">${count === 1 ? t("sensorCountOne") : t("sensorCount", { n: count })}${masked ? ` · ${t("hiddenCount", { n: masked })}` : ""}</span>${names ? html`<span class="muted occupants">${t("occupantsLabel")} ${names}</span>` : nothing}</button></header>
-      ${isOpen ? this.roomBody(r) : nothing}
-    </section>`;
-  }
-
   private roomBody(r: RoomsView["rooms"][number]) {
     const t = this.t;
     return html`<div class="body" data-room=${r.area_id}>
@@ -244,18 +230,14 @@ class HomeStructureRooms extends LitElement {
     </div>`;
   }
 
-  /** The rooms by floor (lowest first, the rooms with no floor last), each floor with its title when the home has several. */
-  private renderFloors(rooms: RoomsView["rooms"]) {
-    const groups = new Map<string, { name: string | null; level: number | null; rooms: RoomsView["rooms"] }>();
-    for (const r of rooms) {
-      const k = r.floor ?? "";
-      if (!groups.has(k)) groups.set(k, { name: r.floor ?? null, level: r.floor_level ?? null, rooms: [] });
-      groups.get(k)!.rooms.push(r);
-    }
-    const list = [...groups.values()].sort((a, b) => (a.name === null ? 1 : 0) - (b.name === null ? 1 : 0) || (a.level ?? 1e9) - (b.level ?? 1e9) || (a.name ?? "").localeCompare(b.name ?? ""));
-    const titled = list.length > 1;
-    return list.map((f) => html`<div class="floor" data-floor=${f.name ?? ""}>${titled ? html`<h3 class="floortitle">${f.name ?? this.t("roomsNoFloor")}</h3>` : nothing}
-      ${f.rooms.map((r) => this.renderRoom(r))}</div>`);
+  /** The page of one room: its name and usual occupants, then its sensors by type. */
+  private renderPage(r: RoomsView["rooms"][number] | undefined) {
+    const t = this.t;
+    const hidden = r ? this.hiddenIn(r.types.flatMap((g) => g.sensors)) : 0;
+    const names = r ? r.occupants.map((id) => this.users.find((u) => u.id === id)?.name).filter(Boolean).join(", ") : "";
+    return html`<div class="pagehead"><button class="back" data-action="back" aria-label=${t("backToRooms")} @click=${() => this.dispatchEvent(new CustomEvent("back", { bubbles: true, composed: true }))}>←</button>
+      <h1>${r?.name ?? ""}</h1>${names ? html`<span class="muted occupants">${t("occupantsLabel")} ${names}</span>` : nothing}${hidden ? html`<span class="muted count">${t("hiddenCount", { n: hidden })}</span>` : nothing}</div>
+    ${r ? html`<section class="room open" data-room-row=${r.area_id}>${this.roomBody(r)}</section>` : html`<p class="muted" data-notonplan>${t("notOnPlan")}</p>`}`;
   }
 
   private lockBar() {
@@ -341,7 +323,7 @@ class HomeStructureRooms extends LitElement {
         <label title=${t("primarySync")}><input type="checkbox" data-action="primary-sync" ?disabled=${this.locks.order || this.busy} .checked=${live(d.primary_sync !== false)} @change=${(e: Event) => void this.setSync((e.target as HTMLInputElement).checked)}>${t("primarySync")}</label>
       </div>
       ${this.locks.order ? nothing : html`<p class="muted note" data-note="order-shows-all">${t("orderShowsAll")}</p>`}
-      ${d.rooms.length ? this.renderFloors(d.rooms) : html`<p class="muted" data-empty>${t("roomsEmpty")}</p>`}
+      ${this.renderPage(d.rooms.find((r) => r.area_id === this.area))}
       ${d.unassigned.some((s) => this.listed(s)) ? html`<details class="unassigned" data-unassigned>
         <summary>${t("unassignedTitle")} (${d.unassigned.filter((s) => this.listed(s)).length})</summary>
         <p class="muted">${t("unassignedHelp")}</p>
@@ -355,6 +337,8 @@ class HomeStructureRooms extends LitElement {
 
   static styles = css`
     :host { display: block; padding: 8px 16px 48px; box-sizing: border-box; color: var(--primary-text-color); }
+    .pagehead { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 0 12px; } .pagehead h1 { font-size: 1.4rem; font-weight: 400; margin: 0; }
+    .back { font: inherit; font-size: 1.4rem; line-height: 1; background: none; border: 0; color: inherit; cursor: pointer; padding: 6px 12px; border-radius: 50%; } .back:hover { background: var(--secondary-background-color); }
     .msg, .intro { padding: 12px 8px; } .muted { color: var(--secondary-text-color); font-size: .85rem; } .warn { color: var(--error-color, #db4437); font-size: .9rem; }
     .locks { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 12px; }
     .lock { font: inherit; font-size: .85rem; color: inherit; background: var(--card-background-color); border: 1px solid var(--divider-color); border-radius: 16px; padding: 4px 12px; cursor: pointer; }
