@@ -1,6 +1,5 @@
 import { LitElement, css, html, nothing, svg } from "lit";
 import { property, state } from "lit/decorators.js";
-import "./groups";
 import "./floors";
 import { translator } from "./i18n";
 import type { Key, T } from "./i18n";
@@ -25,7 +24,7 @@ class HomeStructurePanel extends LitElement {
   @state() private cands: Candidates | null = null;
   @state() private listMode: boolean | null = null;
   @state() private failed = false;
-  @state() private tab: "plan" | "rooms" | "groups" = "plan";
+  @state() private tab: "plan" | "rooms" = "plan";
   @state() private locked = true;          // the plan is locked each time the panel is opened: nothing changes until the user unlocks it
   private chain: Promise<unknown> = Promise.resolve();
   private candFor = "";
@@ -554,7 +553,6 @@ class HomeStructurePanel extends LitElement {
         <nav class="tabs" role="tablist">
           <button role="tab" class="tab ${plan ? "on" : ""}" aria-selected=${plan} data-tab="plan" @click=${() => { if (this.tab !== "plan") void this.load(); this.tab = "plan"; }}>${t("tabPlan")}</button>
           <button role="tab" class="tab ${this.tab === "rooms" ? "on" : ""}" aria-selected=${this.tab === "rooms"} data-tab="rooms" @click=${() => (this.tab = "rooms")}>${t("tabRooms")}</button>
-          <button role="tab" class="tab ${this.tab === "groups" ? "on" : ""}" aria-selected=${this.tab === "groups"} data-tab="groups" @click=${() => (this.tab = "groups")}>${t("tabGroups")}</button>
         </nav>
         ${plan ? html`<span class="status ${this.status}" role="status" data-status=${this.status}>${this.statusText()}</span>
         <span class="grow"></span>
@@ -569,7 +567,7 @@ class HomeStructurePanel extends LitElement {
         ${this.renderTray()}
         <main>${list ? this.renderList() : this.renderPlan()}</main>
         ${this.renderDrawer()}
-      </div>` : this.tab === "rooms" ? html`<home-structure-floors .hass=${this.hass}></home-structure-floors>` : html`<home-structure-groups .hass=${this.hass}></home-structure-groups>`}`;
+      </div>` : html`<home-structure-floors .hass=${this.hass}></home-structure-floors>`}`;
   }
 
   static styles = css`

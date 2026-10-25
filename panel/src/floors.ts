@@ -2,6 +2,7 @@ import { LitElement, css, html, nothing } from "lit";
 import type { TemplateResult } from "lit";
 import { property, state } from "lit/decorators.js";
 import { repeat } from "lit/directives/repeat.js";
+import "./groups";
 import "./order";
 import "./rooms";
 import { translator } from "./i18n";
@@ -16,6 +17,14 @@ interface Cat { key: string; domain: string; type: string; sensors: { entity_id:
 interface RoomDraft { original: string | null; name: string; icon: string; floor: string; labels: string[]; aliases: string[]; alias: string; aliasOpen: boolean; picture: string | null;
   labelPicker: boolean; newLabel: string; occupants: string[]; occPicker: boolean; panel: boolean; choices: Record<string, string>; iconOpen: boolean; uploading: boolean }
 interface FloorDraft { original: string | null; name: string; icon: string; level: string; aliases: string[]; alias: string; aliasOpen: boolean; iconOpen: boolean }
+
+function readMode(): "floors" | "groups" {
+  try {
+    return localStorage.getItem("home_structure_rooms_mode") === "groups" ? "groups" : "floors";
+  } catch {
+    return "floors";
+  }
+}
 
 const ALWAYS = ["sensor.temperature", "sensor.humidity"];      // Home Assistant keeps these two on the room itself: they are always offered
 const COLORS: Record<string, string> = { primary: "--primary-color", accent: "--accent-color", disabled: "--disabled-color", red: "--red-color", pink: "--pink-color", purple: "--purple-color",
@@ -32,6 +41,8 @@ class HomeStructureFloors extends LitElement {
   @state() private counts: Area[] = [];
   @state() private users: { id: string; name: string }[] = [];
   private options: { room_occupants?: Record<string, string[]> } = {};
+  @state() private mode: "floors" | "groups" = readMode();
+  @state() private version = 0;
   @state() private ready = false;
   @state() private failed = false;
   @state() private status: "idle" | "saving" | "saved" | "error" = "idle";
@@ -72,6 +83,7 @@ class HomeStructureFloors extends LitElement {
       this.users = boot.users ?? [];
       this.options = boot.options ?? {};
       this.ready = true;
+      this.version++;
     } catch {
       this.failed = true;
     }
@@ -501,20 +513,36 @@ class HomeStructureFloors extends LitElement {
     if (this.failed) return html`<p class="msg">${this.t("notLoaded")}</p>`;
     if (!this.ready) return html`<p class="msg">${this.t("loading")}</p>`;
     if (this.view) return html`<home-structure-rooms .hass=${this.hass} .area=${this.view} @back=${() => { this.view = null; void this.load(); }}></home-structure-rooms>`;
+    const modes = html`<nav class="modes" role="tablist">${(["floors", "groups"] as const).map((m) => html`<button role="tab" class="mode ${this.mode === m ? "on" : ""}" aria-selected=${this.mode === m} data-mode=${m}
+      @click=${() => this.setMode(m)}><ha-icon .icon=${m === "floors" ? "mdi:floor-plan" : "mdi:select-group"}></ha-icon><span>${this.t(m === "floors" ? "tabFloors" : "tabGroups")}</span></button>`)}</nav>`;
+    const dialogs = html`${this.renderRoomDialog()}${this.renderFloorDialog()}
+      ${this.orderFor ? html`<home-structure-order .hass=${this.hass} .area=${this.orderFor} @closed=${() => { const a = this.orderFor!; this.orderFor = null; void this.loadCats(a, false); void this.load(); }}></home-structure-order>` : nothing}`;
+    if (this.mode === "groups") return html`${modes}<home-structure-groups .hass=${this.hass} .regs=${this.areas} .version=${this.version}
+      @open-room=${(e: CustomEvent) => (this.view = e.detail.id)} @edit-room=${(e: CustomEvent) => void this.openRoom(e.detail.id)} @create-room=${() => void this.openRoom(null)}></home-structure-groups>${dialogs}`;
     const empty = !this.areas.length && !this.floors.length;
     const floors = this.drag?.kind === "floor" ? this.drag.order.map((id) => this.floors.find((f) => f.floor_id === id)).filter((f): f is Floor => !!f) : this.floors;
-    return html`
+    return html`${modes}
       <div class="head">${this.reorderFloors ? html`<button class="textbtn" data-action="floors-done" @click=${() => (this.reorderFloors = false)}>${this.t("done")}</button>` : this.floors.length > 1 ? this.menuButton({ kind: "page" }, "page-menu") : nothing}</div>
       <div class="groups">${repeat(floors, (f) => f.floor_id, (f) => this.renderFloor(f))}</div>
       ${this.reorderFloors ? nothing : this.renderUnassigned()}
       ${empty ? html`<p class="muted empty" data-empty>${this.t("noRoomsAtAll")}</p>` : nothing}
       <span class="menuwrap fabwrap"><button class="fab" data-action="add" @click=${() => (this.menu = this.menu?.kind === "fab" ? null : { kind: "fab" })}>${this.svg(ICON.plus)}${this.t("add")}</button>${this.menu?.kind === "fab" ? this.renderMenu(this.menu) : nothing}</span>
       <span class="status ${this.status}" role="status" data-status=${this.status}>${this.statusText()}</span>
-      ${this.renderRoomDialog()}${this.renderFloorDialog()}
-      ${this.orderFor ? html`<home-structure-order .hass=${this.hass} .area=${this.orderFor} @closed=${() => { const a = this.orderFor!; this.orderFor = null; void this.loadCats(a, false); void this.load(); }}></home-structure-order>` : nothing}`;
+      ${dialogs}`;
+  }
+
+  private setMode(m: "floors" | "groups"): void {
+    this.mode = m;
+    this.menu = null;
+    try {
+      localStorage.setItem("home_structure_rooms_mode", m);
+    } catch { /* the choice is only a convenience */ }
   }
 
   static styles = [pageCss, css`
+    .modes { display: flex; justify-content: center; border-bottom: 1px solid var(--divider-color); margin: -8px 0 8px; }
+    .mode { display: flex; align-items: center; gap: 8px; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--secondary-text-color); font: inherit; font-weight: 500; padding: 12px 20px; cursor: pointer; }
+    .mode.on { color: var(--primary-color); border-bottom-color: var(--primary-color); } .mode ha-icon { --mdc-icon-size: 22px; }
     .card.clickable { cursor: pointer; } .card.clickable:hover { border-color: var(--primary-color); }
     .picture { background-size: cover; background-position: center; }
     .fabwrap { position: fixed; right: 20px; bottom: 20px; z-index: 10; } .fabwrap .fab { position: static; } .menu.up { top: auto; bottom: calc(100% + 8px); right: 0; }

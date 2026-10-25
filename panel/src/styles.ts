@@ -71,7 +71,13 @@ export const pageCss = css`
     .textbtn { background: none; border: 0; color: var(--primary-color); font: inherit; font-weight: 500; padding: 10px 14px; border-radius: 20px; cursor: pointer; }
     .filled { font: inherit; font-weight: 500; background: var(--primary-color); color: var(--text-primary-color, #fff); border: 0; border-radius: 20px; padding: 10px 24px; cursor: pointer; }
     .filled:disabled { background: color-mix(in srgb, var(--primary-text-color) 12%, transparent); color: color-mix(in srgb, var(--primary-text-color) 38%, transparent); cursor: default; } .filled.danger { background: var(--error-color, #db4437); }
-  `;
+  
+    /* shared by the floors and groups views */
+    .card.clickable { cursor: pointer; } .card.clickable:hover { border-color: var(--primary-color); }
+    .picture { background-size: cover; background-position: center; }
+    .fabwrap { position: fixed; right: 20px; bottom: 20px; z-index: 10; } .fabwrap .fab { position: static; } .menu.up { top: auto; bottom: calc(100% + 8px); right: 0; }
+    .line .iconbtn + .menuwrap { margin-left: -8px; }
+`;
 
 /** Paths of the Material Design Icons used by those pages (inline, so nothing has to be loaded). */
 export const ICON = {

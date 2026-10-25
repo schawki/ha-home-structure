@@ -5,12 +5,12 @@ import { translator } from "./i18n";
 import type { Key, T } from "./i18n";
 import { repeat } from "lit/directives/repeat.js";
 import { addRoom, clone, groupsOf, inside, moveGroup, moveRoom, moveRoomInGroup, nearestIndex, newGroupId, removeFromAll, removeRoom, reorder, setGroupOrder, setRoomOrder, ungrouped } from "./logic";
-import type { Area, Group, GroupKind, GroupSensor, Hass, SensorCfg, SensorMode } from "./types";
+import type { Area, AreaReg, Group, GroupKind, GroupSensor, Hass, SensorCfg, SensorMode } from "./types";
 
 const KINDS: GroupKind[] = ["temperature", "humidity"];
 const MODES: SensorMode[] = ["none", "single", "all", "selection"];
 
-type Menu = { kind: "page" } | { kind: "group"; gid: string } | { kind: "room"; gid: string | null; aid: string } | null;
+type Menu = { kind: "page" } | { kind: "fab" } | { kind: "group"; gid: string } | { kind: "room"; gid: string | null; aid: string } | null;
 type Mover = { mode: "move" | "add"; gid: string | null; aid: string; target: string } | null;
 interface Drag { kind: "room" | "group"; gid: string; id: string; order: string[] }
 interface Draft { original: string | null; id: string; name: string; level: string; icon: string; areas: string[]; aliases: string[]; alias: string; temperature: SensorCfg; humidity: SensorCfg; picker: boolean; aliasOpen: boolean; panel: boolean }
@@ -20,6 +20,8 @@ interface Draft { original: string | null; id: string; name: string; level: stri
 /** The "Groups" page of the panel: groups of rooms laid out like the floors of Home Assistant's Areas page. */
 class HomeStructureGroups extends LitElement {
   @property({ attribute: false }) hass!: Hass;
+  @property({ attribute: false }) regs: AreaReg[] = [];      // the rooms as Home Assistant has them: name, icon and picture
+  @property({ type: Number }) version = 0;                   // bumped by the page when a room was edited, so that the cards are read again
   @state() private areas: Area[] = [];
   @state() private groups: Group[] = [];
   @state() private ready = false;
@@ -41,6 +43,16 @@ class HomeStructureGroups extends LitElement {
 
   protected willUpdate(): void {
     if (this.hass) this.t = translator(this.hass.language);
+  }
+
+  protected updated(changed: Map<string, unknown>): void {
+    if (changed.has("version") && changed.get("version") !== undefined) void this.load();
+  }
+
+  /** What a card shows of a room: Home Assistant's own name, icon and picture win over what Home Structure knew. */
+  private shown(a: Area): { name: string; icon: string; picture: string | null } {
+    const r = this.regs.find((x) => x.area_id === a.id);
+    return { name: r?.name ?? a.name, icon: r?.icon || a.icon || "", picture: r?.picture ?? null };
   }
 
   connectedCallback(): void {
@@ -79,7 +91,8 @@ class HomeStructureGroups extends LitElement {
   }
 
   private areaName(id: string): string {
-    return this.areas.find((a) => a.id === id)?.name ?? id;
+    const a = this.areas.find((x) => x.id === id);
+    return a ? this.shown(a).name : id;
   }
 
   private known(ids: string[]): Area[] {
@@ -214,7 +227,11 @@ class HomeStructureGroups extends LitElement {
   }
 
   private roomIcon(a: Area) {
-    return html`<ha-icon .icon=${a.icon || "mdi:texture-box"}></ha-icon>`;
+    return html`<ha-icon .icon=${this.shown(a).icon || "mdi:texture-box"}></ha-icon>`;
+  }
+
+  private tell(name: "open-room" | "edit-room" | "create-room", id = ""): void {
+    this.dispatchEvent(new CustomEvent(name, { detail: { id }, bubbles: true, composed: true }));
   }
 
   private menuItem(action: string, icon: string, label: string, fn: () => void, danger = false) {
@@ -223,7 +240,9 @@ class HomeStructureGroups extends LitElement {
 
   private renderMenu(m: NonNullable<Menu>) {
     const items = [];
-    if (m.kind === "page") {
+    if (m.kind === "fab") {
+      items.push(this.menuItem("create-group", ICON.plus, this.t("createGroup"), () => this.openDialog(null)), this.menuItem("create-room", ICON.plus, this.t("createRoom"), () => this.tell("create-room")));
+    } else if (m.kind === "page") {
       items.push(this.menuItem("reorder-groups", ICON.sort, this.t("rearrangeGroups"), () => (this.reorderGroups = true)));
     } else if (m.kind === "group") {
       items.push(this.menuItem("reorder-rooms", ICON.sort, this.t("rearrangeRooms"), () => (this.reorderRooms = m.gid)));
@@ -238,7 +257,7 @@ class HomeStructureGroups extends LitElement {
       if (m.gid) items.push(this.menuItem("remove-room", ICON.minus, this.t("removeFromGroup"), () => this.persist(removeRoom(this.groups, m.gid!, m.aid))));
       if (several) items.push(this.menuItem("remove-all", ICON.close, this.t("removeFromAll"), () => this.persist(removeFromAll(this.groups, m.aid)), true));
     }
-    return html`<div class="scrim" @click=${() => (this.menu = null)}></div><div class="menu" role="menu">${items}</div>`;
+    return html`<div class="scrim" @click=${() => (this.menu = null)}></div><div class="menu ${m.kind === "fab" ? "up" : ""}" role="menu">${items}</div>`;
   }
 
   private menuButton(menu: NonNullable<Menu>, action: string) {
@@ -296,13 +315,15 @@ class HomeStructureGroups extends LitElement {
     const rearranging = !!g && this.reorderRooms === g.id;
     const dragging = this.drag?.kind === "room" && this.drag.id === a.id && this.drag.gid === g?.id;
     const caption = this.caption(a);
-    return html`<div class="card ${rearranging ? "sortable" : ""} ${dragging ? "dragging" : ""}" data-room=${a.id}
-      @pointerdown=${rearranging ? (e: PointerEvent) => this.startDrag(e, "room", g!.id, a.id, this.known(g!.areas).map((x) => x.id)) : nothing}>
-      <div class="picture">${this.roomIcon(a)}</div>
+    const v = this.shown(a);
+    return html`<div class="card ${rearranging ? "sortable" : "clickable"} ${dragging ? "dragging" : ""}" data-room=${a.id}
+      @pointerdown=${rearranging ? (e: PointerEvent) => this.startDrag(e, "room", g!.id, a.id, this.known(g!.areas).map((x) => x.id)) : nothing}
+      @click=${rearranging ? nothing : (e: Event) => { if (!(e.target as HTMLElement).closest(".iconbtn, .menu, .scrim")) this.tell("open-room", a.id); }}>
+      <div class="picture" style=${v.picture ? `background-image:url(${v.picture})` : ""}>${v.picture ? nothing : this.roomIcon(a)}</div>
       <div class="info">
-        <div class="line"><strong>${a.name}</strong>
+        <div class="line"><strong>${v.name}</strong>
           ${rearranging ? html`<span class="grip" role="button" tabindex="0" data-action="room-handle" aria-label=${this.t("moveItem")} @keydown=${(e: KeyboardEvent) => this.handleKey(e, "room", g!.id, a.id)}>⋮⋮</span>`
-            : this.menuButton({ kind: "room", gid: g?.id ?? null, aid: a.id }, "room-menu")}</div>
+            : html`<button class="iconbtn" data-action="edit-room" aria-label=${this.t("editRoom")} @click=${() => this.tell("edit-room", a.id)}>${this.svg(ICON.pencil)}</button>${this.menuButton({ kind: "room", gid: g?.id ?? null, aid: a.id }, "room-menu")}`}</div>
         ${caption ? html`<small>${caption}</small>` : nothing}
       </div>
     </div>`;
@@ -448,7 +469,7 @@ class HomeStructureGroups extends LitElement {
       <div class="groups">${repeat(this.shownGroups(), (g) => g.id, (g) => this.renderGroup(g))}</div>
       ${this.groups.length ? nothing : html`<p class="muted empty" data-empty>${this.t("noGroups")}</p>`}
       ${this.renderUngrouped()}
-      <button class="fab" data-action="add-group" @click=${() => this.openDialog(null)}>${this.svg(ICON.plus)}${this.t("add")}</button>
+      <span class="menuwrap fabwrap"><button class="fab" data-action="add" @click=${() => (this.menu = this.menu?.kind === "fab" ? null : { kind: "fab" })}>${this.svg(ICON.plus)}${this.t("add")}</button>${this.menu?.kind === "fab" ? this.renderMenu(this.menu) : nothing}</span>
       <span class="status ${this.status}" role="status" data-status=${this.status}>${this.statusText()}</span>
       ${this.renderDialog()}${this.renderMover()}${this.renderConfirm()}`;
   }

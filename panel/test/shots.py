@@ -44,6 +44,7 @@ with sync_playwright() as p:
     pg.wait_for_function(f"{P}?.querySelector('.bar')")
     def q(sel): return pg.locator(f"css=home-structure-panel >> {sel}")
     def settle(): pg.wait_for_function(f"{P}.querySelector('[data-status]').dataset.status !== 'saving'")
+    q("[data-action=toggle-lock]").click()
     q("[data-action=add-all]").click(); settle()
     def link(a, c):
         bx = q(f"[data-space='{c}']").bounding_box(); h = q(f"[data-space='{a}'] .handle").bounding_box()
@@ -56,7 +57,8 @@ with sync_playwright() as p:
     pg = b.new_page(viewport={"width": 1100, "height": 640})
     pg.goto(base + "?groups=1&dark=1")
     pg.wait_for_function(f"{P}?.querySelector('.bar')")
-    q("[data-tab=groups]").click()
+    q("[data-tab=rooms]").click()
+    pg.locator("css=home-structure-panel >> home-structure-floors >> [data-mode=groups]").click()
     pg.wait_for_selector("css=home-structure-panel >> home-structure-groups >> [data-group=nuit]")
     pg.locator("css=home-structure-panel >> home-structure-groups >> [data-group=vide]").evaluate("e => e.remove()")
     pg.screenshot(path=os.path.join(SHOTS, "groups.png"))
