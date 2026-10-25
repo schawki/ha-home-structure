@@ -552,7 +552,7 @@ class HomeStructurePanel extends LitElement {
         ${this.narrow ? html`<button class="menu" @click=${() => this.dispatchEvent(new CustomEvent("hass-toggle-menu", { bubbles: true, composed: true }))} aria-label="Menu">☰</button>` : nothing}
         <h1>${t("title")}</h1>
         <nav class="tabs" role="tablist">
-          <button role="tab" class="tab ${plan ? "on" : ""}" aria-selected=${plan} data-tab="plan" @click=${() => (this.tab = "plan")}>${t("tabPlan")}</button>
+          <button role="tab" class="tab ${plan ? "on" : ""}" aria-selected=${plan} data-tab="plan" @click=${() => { if (this.tab !== "plan") void this.load(); this.tab = "plan"; }}>${t("tabPlan")}</button>
           <button role="tab" class="tab ${this.tab === "rooms" ? "on" : ""}" aria-selected=${this.tab === "rooms"} data-tab="rooms" @click=${() => (this.tab = "rooms")}>${t("tabRooms")}</button>
           <button role="tab" class="tab ${this.tab === "groups" ? "on" : ""}" aria-selected=${this.tab === "groups"} data-tab="groups" @click=${() => (this.tab = "groups")}>${t("tabGroups")}</button>
         </nav>

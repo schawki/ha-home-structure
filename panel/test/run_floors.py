@@ -106,6 +106,23 @@ with sync_playwright() as p:
     ok(q(pg, "[data-room-dialog]").count() == 1, "a refused save keeps the dialog open")
     pg.close()
 
+    # ---- usual occupants (shared with the Plan tab)
+    pg = new()
+    q(pg, "[data-room=cuisine] [data-action=edit-room]").click()
+    ok(q(pg, "[data-occupant]").count() == 0, "a room with nobody shows no occupant")
+    q(pg, "[data-action=occupant-open]").click(); q(pg, "[data-pick-occupant=u1]").click(); q(pg, "[data-action=occupant-open]").click(); q(pg, "[data-pick-occupant=u2]").click()
+    ok(q(pg, "[data-occupant]").count() == 2 and q(pg, "[data-action=occupant-open]").count() == 0, "users are added as chips; none is left to add")
+    q(pg, "[data-occupant=u2] .chipx").click()
+    q(pg, "[data-action=dialog-save]").click()
+    pg.wait_for_selector("css=home-structure-panel >> home-structure-floors >> [data-room-dialog]", state="detached")
+    ok(pg.evaluate("window.__s.saves.at(-1).room_occupants['area:cuisine']") == ["u1"], "saving writes the occupants where the Plan tab reads them")
+    q(pg, "[data-room=cuisine] [data-action=edit-room]").click()
+    ok(q(pg, "[data-occupant=u1]").count() == 1, "the editor shows them again")
+    q(pg, "[data-occupant=u1] .chipx").click(); q(pg, "[data-action=dialog-save]").click()
+    pg.wait_for_selector("css=home-structure-panel >> home-structure-floors >> [data-room-dialog]", state="detached")
+    ok("area:cuisine" not in pg.evaluate("window.__s.saves.at(-1).room_occupants"), "a room with nobody has no entry")
+    pg.close()
+
     # ---- floors
     pg = new()
     q(pg, "[data-floor=ground] [data-action=floor-menu]").click(); q(pg, "[data-action=edit-floor]").click()

@@ -14,7 +14,7 @@ type Menu = { kind: "page" } | { kind: "floor"; fid: string } | { kind: "fab" } 
 interface Drag { kind: "room" | "floor"; gid: string; id: string; order: string[] }
 interface Cat { key: string; domain: string; type: string; sensors: { entity_id: string; name: string }[]; initial: string }
 interface RoomDraft { original: string | null; name: string; icon: string; floor: string; labels: string[]; aliases: string[]; alias: string; aliasOpen: boolean; picture: string | null;
-  labelPicker: boolean; newLabel: string; panel: boolean; choices: Record<string, string>; iconOpen: boolean; uploading: boolean }
+  labelPicker: boolean; newLabel: string; occupants: string[]; occPicker: boolean; panel: boolean; choices: Record<string, string>; iconOpen: boolean; uploading: boolean }
 interface FloorDraft { original: string | null; name: string; icon: string; level: string; aliases: string[]; alias: string; aliasOpen: boolean; iconOpen: boolean }
 
 const ALWAYS = ["sensor.temperature", "sensor.humidity"];      // Home Assistant keeps these two on the room itself: they are always offered
@@ -30,6 +30,8 @@ class HomeStructureFloors extends LitElement {
   @state() private areas: AreaReg[] = [];
   @state() private labels: Label[] = [];
   @state() private counts: Area[] = [];
+  @state() private users: { id: string; name: string }[] = [];
+  private options: { room_occupants?: Record<string, string[]> } = {};
   @state() private ready = false;
   @state() private failed = false;
   @state() private status: "idle" | "saving" | "saved" | "error" = "idle";
@@ -62,11 +64,13 @@ class HomeStructureFloors extends LitElement {
     try {
       const [floors, areas, labels, boot] = await Promise.all([
         this.hass.callWS<Floor[]>({ type: "config/floor_registry/list" }), this.hass.callWS<AreaReg[]>({ type: "config/area_registry/list" }),
-        this.hass.callWS<Label[]>({ type: "config/label_registry/list" }), this.hass.callWS<{ areas: Area[] }>({ type: "home_structure/get" })]);
+        this.hass.callWS<Label[]>({ type: "config/label_registry/list" }), this.hass.callWS<{ areas: Area[]; users: { id: string; name: string }[]; options: { room_occupants?: Record<string, string[]> } }>({ type: "home_structure/get" })]);
       this.floors = floors;
       this.areas = areas;
       this.labels = labels;
       this.counts = boot.areas;
+      this.users = boot.users ?? [];
+      this.options = boot.options ?? {};
       this.ready = true;
     } catch {
       this.failed = true;
@@ -191,7 +195,7 @@ class HomeStructureFloors extends LitElement {
     const a = id ? this.areas.find((x) => x.area_id === id) : null;
     this.cats = [];
     this.room = { original: a?.area_id ?? null, name: a?.name ?? "", icon: a?.icon ?? "", floor: a?.floor_id ?? "", labels: [...(a?.labels ?? [])], aliases: [...(a?.aliases ?? [])], alias: "", aliasOpen: false,
-      picture: a?.picture ?? null, labelPicker: false, newLabel: "", panel: true, choices: {}, iconOpen: false, uploading: false };
+      picture: a?.picture ?? null, labelPicker: false, newLabel: "", occupants: [...(this.options.room_occupants?.[`area:${a?.area_id}`] ?? [])].filter((u) => this.users.some((x) => x.id === u)), occPicker: false, panel: true, choices: {}, iconOpen: false, uploading: false };
     if (a) await this.loadCats(a.area_id, true);
   }
 
@@ -267,6 +271,14 @@ class HomeStructureFloors extends LitElement {
     try {
       if (d.original) {
         await this.hass.callWS({ type: "config/area_registry/update", area_id: d.original, name: d.name.trim(), icon: d.icon.trim() || null, floor_id: d.floor || null, labels: d.labels, aliases, picture: d.picture });
+        const key = `area:${d.original}`;
+        const before = (this.options.room_occupants?.[key] ?? []).filter((u) => this.users.some((x) => x.id === u));
+        if (before.join() !== d.occupants.join()) {      // the usual occupants are Home Structure's own: read the options afresh, change this room, save
+          const fresh = await this.hass.callWS<{ options: { room_occupants?: Record<string, string[]> } }>({ type: "home_structure/get" });
+          const o = { ...fresh.options, room_occupants: { ...(fresh.options.room_occupants ?? {}) } };
+          if (d.occupants.length) o.room_occupants[key] = d.occupants; else delete o.room_occupants[key];
+          await this.hass.callWS({ type: "home_structure/save", options: o });
+        }
         for (const c of this.cats) {
           const choice = d.choices[c.key] ?? "";
           if (choice !== c.initial) await this.hass.callWS({ type: "home_structure/primary_set", area_id: d.original, key: c.key, entity_id: choice || null });
@@ -415,6 +427,16 @@ class HomeStructureFloors extends LitElement {
     return this.t("catSensor", { type });
   }
 
+  private occupantBlock(d: RoomDraft) {
+    const t = this.t;
+    const free = this.users.filter((u) => !d.occupants.includes(u.id));
+    return html`<h3>${t("occupantsTitle")}</h3><p class="text">${t("occupantsHint")}</p>
+      <div class="chips" data-field="occupants">${d.occupants.map((id) => this.users.find((u) => u.id === id)).filter((u): u is { id: string; name: string } => !!u).map((u) => html`<span class="chip" data-occupant=${u.id}>${u.name}<button class="chipx" aria-label="${t("removeItem")} ${u.name}" @click=${() => this.patchRoom({ occupants: d.occupants.filter((x) => x !== u.id) })}>${this.svg(ICON.close)}</button></span>`)}</div>
+      ${free.length ? html`<div class="menuwrap"><button class="tonal" data-action="occupant-open" @click=${() => this.patchRoom({ occPicker: !d.occPicker })}>${this.svg(ICON.plus)}${t("addOccupant")}</button>
+        ${d.occPicker ? html`<div class="scrim" @click=${() => this.patchRoom({ occPicker: false })}></div><div class="menu picker" role="listbox">${free.map((u) => html`<button class="item" role="option" data-pick-occupant=${u.id}
+          @click=${() => this.patchRoom({ occupants: [...d.occupants, u.id], occPicker: false })}><span>${u.name}</span></button>`)}</div>` : nothing}</div>` : nothing}`;
+  }
+
   private renderRoomDialog() {
     const d = this.room;
     if (!d) return nothing;
@@ -442,6 +464,7 @@ class HomeStructureFloors extends LitElement {
           : html`<label class="tonal filebtn" data-action="picture-add">${this.svg(ICON.plus)}${d.uploading ? t("saving") : t("addPicture")}<input class="file" type="file" accept="image/jpeg,image/png,image/gif" hidden
             @change=${(e: Event) => { const f = (e.target as HTMLInputElement).files?.[0]; if (f) void this.upload(f); }}></label><p class="helper">${t("pictureHelp")}</p>`}</div>
       ${this.aliasBlock(d, (p) => this.patchRoom(p), () => this.addRoomAlias(), t("roomAliasesHelp"))}
+      ${d.original && this.users.length ? this.occupantBlock(d) : nothing}
       ${d.original ? html`<section class="expansion" data-panel>
         <button class="exphead" aria-expanded=${d.panel} @click=${() => this.patchRoom({ panel: !d.panel })}><span>${t("sensorsPanel")}</span><span class="chev ${d.panel ? "open" : ""}">${this.svg(ICON.chevron)}</span></button>
         ${d.panel ? html`<div class="expbody">${this.cats.map((c) => html`<div class="sensorbox" data-cat=${c.key}><div class="sensortitle">${this.catLabel(c)}</div>

@@ -84,7 +84,7 @@ const EN = {
   assist: "Assist", assistHelp: "Exposed to Assist (set in Home Assistant, Voice assistants)", priority: "Priority {n}",
   notFirst: "The first sensor is not the one Assist uses.", occupantsLabel: "Usual occupants:", sensorCount: "{n} sensors", sensorCountOne: "1 sensor", roomsNoFloor: "No floor",
   unassignedTitle: "Sensors with no room", unassignedHelp: "These sensors are in no area.",
-  occupantsTitle: "Usual occupants", occupantsHint: "The people who usually use this room. Other integrations, such as a dashboard, can read this.", noUsers: "No user found.",
+  occupantsTitle: "Usual occupants", occupantsHint: "The people who usually use this room. Other integrations, such as a dashboard, can read this.", noUsers: "No user found.", addOccupant: "Add an occupant",
 } as const;
 export type Key = keyof typeof EN;
 type Dict = Record<Key, string>;
@@ -174,7 +174,7 @@ const FR: Dict = {
   assist: "Assist", assistHelp: "Exposé à Assist (réglé dans Home Assistant, Assistants vocaux)", priority: "Priorité {n}",
   notFirst: "Le premier capteur n'est pas celui qu'Assist utilise.", occupantsLabel: "Occupants habituels :", sensorCount: "{n} capteurs", sensorCountOne: "1 capteur", roomsNoFloor: "Sans étage",
   unassignedTitle: "Capteurs sans pièce", unassignedHelp: "Ces capteurs ne sont dans aucune zone.",
-  occupantsTitle: "Occupants habituels", occupantsHint: "Les personnes qui utilisent habituellement cette pièce. D'autres intégrations, comme un tableau de bord, peuvent le lire.", noUsers: "Aucun utilisateur trouvé.",
+  occupantsTitle: "Occupants habituels", occupantsHint: "Les personnes qui utilisent habituellement cette pièce. D'autres intégrations, comme un tableau de bord, peuvent le lire.", noUsers: "Aucun utilisateur trouvé.", addOccupant: "Ajouter un occupant",
 };
 
 const LANGS: Record<string, Dict> = { en: EN as unknown as Dict, fr: FR };
