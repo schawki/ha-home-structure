@@ -9,7 +9,7 @@ import logging
 from typing import Any
 
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers import area_registry as ar, device_registry as dr, entity_registry as er
 
 from .const import DOMAIN
 
@@ -19,6 +19,12 @@ DOMAINS = ("sensor", "binary_sensor")
 OTHER = "other"      # a sensor with no device class
 ASSIST = "conversation"
 MATTER_TIMEOUT = 4
+
+# The categories that describe a room: shown by default. Every other sensor is hidden as "other"; sound detections are hidden as "sound".
+SHOWN = {("sensor", t) for t in ("temperature", "humidity", "illuminance", "carbon_dioxide", "pressure", "atmospheric_pressure", "sound_pressure", "pm25", "pm10",
+                                  "volatile_organic_compounds", "volatile_organic_compounds_parts")} | {("binary_sensor", t) for t in ("motion", "occupancy", "presence")}
+SOUND_PLATFORMS = ("sound_recognition",)      # integrations whose sensors are detections of sounds; any binary sensor of class `sound` counts too
+NATIVE_FIELDS = {"sensor.temperature": "temperature_entity_id", "sensor.humidity": "humidity_entity_id"}      # what Home Assistant itself keeps on an area
 
 
 # ---- what is exposed
@@ -180,8 +186,15 @@ def collect(hass: HomeAssistant) -> list[dict]:
                     "state": state.state if state else "unknown", "unit": (state.attributes.get("unit_of_measurement") if state else None),
                     "domain": e.domain, "type": _device_class(e, state), "area_id": e.area_id or (device.area_id if device else None),
                     "device_id": e.device_id, "device_name": (device.name_by_user or device.name) if device else None,
-                    "platform": e.platform, "labels": sorted(e.labels)})
+                    "platform": e.platform, "labels": sorted(e.labels), "unique_id": str(e.unique_id or "")})
     return out
+
+
+def hidden_kind(s: dict) -> str | None:
+    """Why a sensor is hidden by default: "sound" (a detection of a sound), "other" (not a category that describes a room), or None (shown)."""
+    if s["platform"] in SOUND_PLATFORMS or (s["domain"] == "binary_sensor" and s["type"] == "sound") or (s["platform"] == "frigate" and ":audio_sensor:" in s["unique_id"]):
+        return "sound"
+    return None if (s["domain"], s["type"]) in SHOWN else "other"
 
 
 def type_key(domain: str, kind: str) -> str:
@@ -193,7 +206,22 @@ def _sort_key(s: dict) -> tuple:
     return (not s["assist"], s["name"].casefold(), s["entity_id"])      # the sensor exposed to Assist comes first, until the user saves an order
 
 
-def grouped(sensors: list[dict], saved: dict[str, list[str]] | None = None) -> list[dict]:
+def pick_primary(items: list[dict], chosen: str | None, native: str | None, sync: bool) -> tuple[str | None, str | None]:
+    """The sensor that stands for the category in the room, and why: ("entity_id", "native" | "chosen" | "assist") or (None, None).
+
+    With the sync on, the one Home Assistant keeps on the area (temperature, humidity) comes first; then the one chosen here; then the first one
+    exposed to Assist (`items` are in their order). Only a sensor of the group can be picked."""
+    ids = {s["entity_id"] for s in items}
+    if sync and native in ids:
+        return native, "native"
+    if chosen in ids:
+        return chosen, "chosen"
+    first = next((s["entity_id"] for s in items if s["assist"]), None)
+    return (first, "assist") if first else (None, None)
+
+
+def grouped(sensors: list[dict], saved: dict[str, list[str]] | None = None, chosen: dict[str, str] | None = None, native: dict[str, str | None] | None = None,
+            sync: bool = True) -> list[dict]:
     """The sensors of one room by type: [{key, type, domain, sensors, ordered, saved, assist_first}].
 
     `ordered` is true when there are at least two sensors of the type (only then does their order mean something). `saved` is true when the user
@@ -201,6 +229,7 @@ def grouped(sensors: list[dict], saved: dict[str, list[str]] | None = None) -> l
     Without a saved order the sensor exposed to Assist comes first. `assist_first` tells whether the first sensor is the one exposed to Assist, or
     None when none is exposed or there is nothing to compare."""
     saved = saved or {}
+    chosen, native = chosen or {}, native or {}
     buckets: dict[tuple[str, str], list[dict]] = {}
     for s in sensors:
         buckets.setdefault((s["domain"], s["type"]), []).append(s)
@@ -214,12 +243,20 @@ def grouped(sensors: list[dict], saved: dict[str, list[str]] | None = None) -> l
             items = sorted(items, key=lambda s: rank.get(s["entity_id"], len(rank)))      # stable: the unlisted ones keep the automatic order
         ordered = len(items) >= 2
         exposed = [s for s in items if s["assist"]]
+        primary, source = pick_primary(items, chosen.get(key), native.get(key), sync)
         out.append({"key": key, "type": kind, "domain": domain, "sensors": items, "ordered": ordered, "saved": bool(mine) and ordered,
-                    "assist_first": (items[0]["assist"] if exposed else None) if ordered else None})
+                    "assist_first": (items[0]["assist"] if exposed else None) if ordered else None, "primary": primary, "primary_source": source})
     return out
 
 
-def view(hass: HomeAssistant, spaces: list[dict], bridges: list[dict] | None, order: dict[str, dict[str, list[str]]] | None = None) -> dict:
+def native_choices(hass: HomeAssistant, area_id: str | None) -> dict[str, str | None]:
+    """The temperature and humidity sensors Home Assistant keeps on the area: {"sensor.temperature": entity id or None, ...}."""
+    area = ar.async_get(hass).async_get_area(area_id) if area_id else None
+    return {key: getattr(area, field, None) if area else None for key, field in NATIVE_FIELDS.items()}
+
+
+def view(hass: HomeAssistant, spaces: list[dict], bridges: list[dict] | None, order: dict[str, dict[str, list[str]]] | None = None,
+         chosen: dict[str, dict[str, str]] | None = None, sync: bool = True) -> dict:
     """What the Rooms panel and the service `get_room_sensors` return.
 
     `rooms` follows `spaces` (the ones that are Home Assistant areas), each with its `occupants`; `unassigned` lists the sensors that are in no area
@@ -235,13 +272,15 @@ def view(hass: HomeAssistant, spaces: list[dict], bridges: list[dict] | None, or
         s["homekit"] = homekit_titles(filters, s["entity_id"])
         s["matter"] = matter_titles(bridges, {"entity_id": s["entity_id"], "domain": s["domain"], "platform": s["platform"], "device_class": None if s["type"] == OTHER else s["type"],
                                               "area_id": s["area_id"], "device_id": s["device_id"], "labels": s["labels"]}) if bridges is not None else []
-        del s["labels"], s["platform"]
+        s["hidden"] = hidden_kind(s)
+        del s["labels"], s["platform"], s["unique_id"]
     by_area: dict[str | None, list[dict]] = {}
     for s in found:
         by_area.setdefault(s["area_id"], []).append(s)
     rooms = [{"id": sp["id"], "area_id": sp["area_id"], "name": sp["name"], "kind": sp["kind"], "occupants": sp.get("occupants", []),
-              "floor": sp.get("floor"), "floor_level": sp.get("floor_level"), "types": grouped(by_area.get(sp["area_id"], []), order.get(sp["area_id"]))} for sp in spaces if sp.get("area_id")]
+              "floor": sp.get("floor"), "floor_level": sp.get("floor_level"), "types": grouped(by_area.get(sp["area_id"], []), order.get(sp["area_id"]), (chosen or {}).get(sp["area_id"]),
+                                               native_choices(hass, sp["area_id"]), sync)} for sp in spaces if sp.get("area_id")]
     loose = [s for s in found if s["area_id"] is None]
     return {"rooms": rooms, "unassigned": sorted(loose, key=lambda s: (s["type"], s["name"].casefold())),
             "homekit": [{"title": f["title"], "mode": f["mode"]} for f in filters], "assistants": {"alexa": can["alexa"], "google": can["google"]},
-            "matter": {"available": bridges is not None, "bridges": [b["name"] for b in bridges] if bridges is not None else []}}
+            "primary_sync": sync, "matter": {"available": bridges is not None, "bridges": [b["name"] for b in bridges] if bridges is not None else []}}

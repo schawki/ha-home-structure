@@ -227,6 +227,10 @@ async def record(hass: HomeAssistant, entry: dict, user_id: str | None) -> dict:
 
 
 def _current(hass: HomeAssistant, entry: dict) -> dict:
+    if entry["kind"] == "primary":
+        from . import primary
+        config = primary._entry(hass)
+        return primary.current(hass, config, entry["area_id"], entry["key"], "native" in entry["after"])
     if entry["kind"] == "exposure":
         return {k: v for k, v in exposed(hass, entry["entity_id"]).items() if k in entry["after"]}
     return _snapshot(hass, entry["entity_id"])
@@ -248,6 +252,10 @@ async def undo(hass: HomeAssistant, entry_id: str) -> dict:
         raise ExposureError("changed_since")
     if entry["kind"] == "exposure":
         _write_exposure(hass, entry["entity_id"], entry["before"])
+    elif entry["kind"] == "primary":
+        from . import primary
+        primary.write(hass, primary._entry(hass), entry["area_id"], entry["key"], entry["before"])
+        _changed(hass)
     else:
         _write_move(hass, entry["entity_id"], entry["before"])
     entry["undone"] = True
@@ -337,5 +345,6 @@ COMMANDS = (ws_exposure_set, ws_move_preview, ws_move_apply, ws_history, ws_undo
 
 
 def async_register(hass: HomeAssistant) -> None:
-    for command in COMMANDS:
+    from . import primary
+    for command in (*COMMANDS, *primary.COMMANDS):
         websocket_api.async_register_command(hass, command)

@@ -6,7 +6,7 @@ import { translator } from "./i18n";
 import type { Key, T } from "./i18n";
 import type { HistoryEntry, Hass, MovePreview, Refs, RoomSensor, RoomsView, User } from "./types";
 
-const ERRORS = ["nothing_to_change", "assistant_unavailable", "unknown_entity", "unknown_area", "no_device", "changed_since", "already_undone", "unknown_entry", "invalid_order", "unauthorized"];
+const ERRORS = ["nothing_to_change", "assistant_unavailable", "unknown_entity", "unknown_area", "no_device", "changed_since", "already_undone", "unknown_entry", "invalid_order", "unauthorized", "native_rejected"];
 type Lock = "assist" | "move" | "order";
 type Assistant = "conversation" | "alexa" | "google";
 type Dialog =
@@ -26,6 +26,8 @@ class HomeStructureRooms extends LitElement {
   @state() private error = "";
   @state() private history: HistoryEntry[] = [];
   @state() private historyOpen = false;
+  @state() private showSounds = false;      // sound detections and the sensors that do not describe a room are hidden at each opening
+  @state() private showOther = false;
   @state() private open: string | null = null;      // the room being managed: one at a time, none at each opening
   private drag: { area: string; key: string; entity: string } | null = null;
   private t: T = translator("en");
@@ -70,7 +72,8 @@ class HomeStructureRooms extends LitElement {
       return true;
     } catch (e) {
       const code = (e as { code?: string }).code ?? "";
-      this.error = ERRORS.includes(code) ? this.t(`err_${code}` as Key) : this.t("err_generic", { error: (e as { message?: string }).message ?? String(e) });
+      const detail = (e as { message?: string }).message ?? String(e);
+      this.error = code === "native_rejected" ? this.t("err_native_rejected", { error: detail }) : ERRORS.includes(code) ? this.t(`err_${code}` as Key) : this.t("err_generic", { error: detail });
       return false;
     } finally {
       this.busy = false;
@@ -184,15 +187,47 @@ class HomeStructureRooms extends LitElement {
     </li>`;
   }
 
+  /** Is the sensor listed? Hidden ones come back with their filter; while the order is unlocked every sensor of a type is listed (the order covers them all). */
+  private listed(s: RoomSensor): boolean {
+    return !s.hidden || (s.hidden === "sound" ? this.showSounds : this.showOther) || !this.locks.order;
+  }
+
+  private hiddenIn(sensors: RoomSensor[]): number {
+    return sensors.filter((s) => s.hidden && !(s.hidden === "sound" ? this.showSounds : this.showOther)).length;
+  }
+
+  private async choose(area: string, key: string, entity: string): Promise<void> {
+    if (this.locks.order) return;
+    await this.write({ type: "home_structure/primary_set", area_id: area, key, entity_id: entity || null });
+  }
+
+  private async setSync(value: boolean): Promise<void> {
+    if (this.locks.order) return;
+    await this.write({ type: "home_structure/primary_sync", value });
+  }
+
+  private chooser(area: string, g: RoomsView["rooms"][number]["types"][number]) {
+    if (g.sensors.every((s) => s.hidden)) return nothing;      // only the categories that describe a room have a chosen sensor
+    const t = this.t, picked = g.primary_source === "chosen" || g.primary_source === "native" ? g.primary ?? "" : "";
+    const why = g.primary_source === "native" ? t("chosenFromHa") : g.primary_source === "assist" ? t("chosenFromAssist") : "";
+    const def = g.primary_source === "assist" ? g.sensors.find((s) => s.entity_id === g.primary)?.name : undefined;
+    return html`<label class="chooser">${t("chosenSensor")}
+      <select data-action="choose" data-key=${g.key} ?disabled=${this.locks.order || this.busy} .value=${live(picked)} @change=${(e: Event) => void this.choose(area, g.key, (e.target as HTMLSelectElement).value)}>
+        <option value="" ?selected=${picked === ""}>${t("chosenDefault")}${def ? ` (${def})` : ""}</option>
+        ${g.sensors.map((s) => html`<option value=${s.entity_id} ?selected=${s.entity_id === picked}>${s.name}</option>`)}
+      </select>${why ? html`<span class="muted why">${why}</span>` : nothing}</label>`;
+  }
+
   private renderRoom(r: RoomsView["rooms"][number]) {
     const t = this.t;
     const names = r.occupants.map((id) => this.users.find((u) => u.id === id)?.name).filter(Boolean).join(", ");
     const isOpen = this.open === r.area_id;
-    const count = r.types.reduce((n, g) => n + g.sensors.length, 0);
+    const all = r.types.flatMap((g) => g.sensors);
+    const count = all.filter((s) => this.listed(s)).length, masked = this.hiddenIn(all);
     return html`<section class="room ${isOpen ? "open" : ""}" data-room-row=${r.area_id}>
       <header><button class="roomhead" data-action="toggle-room" aria-expanded=${isOpen} @click=${() => (this.open = isOpen ? null : r.area_id)}>
         <span class="chev">${isOpen ? "▾" : "▸"}</span><h2>${r.name}</h2>
-        <span class="muted count">${count === 1 ? t("sensorCountOne") : t("sensorCount", { n: count })}</span>${names ? html`<span class="muted occupants">${t("occupantsLabel")} ${names}</span>` : nothing}</button></header>
+        <span class="muted count">${count === 1 ? t("sensorCountOne") : t("sensorCount", { n: count })}${masked ? ` · ${t("hiddenCount", { n: masked })}` : ""}</span>${names ? html`<span class="muted occupants">${t("occupantsLabel")} ${names}</span>` : nothing}</button></header>
       ${isOpen ? this.roomBody(r) : nothing}
     </section>`;
   }
@@ -200,9 +235,10 @@ class HomeStructureRooms extends LitElement {
   private roomBody(r: RoomsView["rooms"][number]) {
     const t = this.t;
     return html`<div class="body" data-room=${r.area_id}>
-      ${r.types.length ? r.types.map((g) => html`<div class="type" data-type=${g.type}>
+      ${r.types.some((g) => g.sensors.some((s) => this.listed(s))) ? r.types.filter((g) => g.sensors.some((s) => this.listed(s))).map((g) => html`<div class="type" data-type=${g.type}>
           <h3>${this.typeName(g.domain, g.type)}${g.saved && !this.locks.order ? html` <button class="link" data-action="reset-order" @click=${() => void this.saveOrder(r.area_id, g.key, [])}>${t("autoOrder")}</button>` : nothing}</h3>
-          <ul>${g.sensors.map((s, i) => this.sensor(s, g, i, r.area_id))}</ul>
+          ${this.chooser(r.area_id, g)}
+          <ul>${g.sensors.map((s, i) => (this.listed(s) ? this.sensor(s, g, i, r.area_id) : nothing))}</ul>
           ${g.assist_first === false ? html`<p class="muted note" data-note="not-first">ⓘ ${t("notFirst")}</p>` : nothing}
         </div>`) : html`<p class="muted">${t("noSensorsInRoom")}</p>`}
     </div>`;
@@ -241,6 +277,12 @@ class HomeStructureRooms extends LitElement {
     if (e.kind === "exposure") {
       const [who, val] = Object.entries(e.after)[0] ?? ["conversation", false];
       return t(val ? "hExposeOn" : "hExposeOff", { entity: e.entity_id, who: who === "conversation" ? "Assist" : who === "alexa" ? "Alexa" : "Google" });
+    }
+    if (e.kind === "primary") {
+      const [domain, ...cls] = (e.key ?? "").split(".");
+      const type = this.typeName(domain, cls.join("."));
+      const chosen = (e.after as { chosen?: string | null }).chosen;
+      return chosen ? t("hPrimaryOn", { entity: chosen, type, room: this.roomName(e.area_id ?? null) }) : t("hPrimaryOff", { type, room: this.roomName(e.area_id ?? null) });
     }
     return t(e.scope === "device" ? "hMoveDevice" : "hMoveEntity", { entity: e.entity_id, room: this.roomName(e.area_id ?? null) });
   }
@@ -293,11 +335,17 @@ class HomeStructureRooms extends LitElement {
     const d = this.data;
     return html`<p class="muted intro">${t("roomsHelp")}${d.matter.available ? nothing : html` ${t("matterUnavailable")}`}</p>
       ${this.lockBar()}
+      <div class="filters" data-filters>
+        <label><input type="checkbox" data-filter="sounds" .checked=${live(this.showSounds)} @change=${(e: Event) => (this.showSounds = (e.target as HTMLInputElement).checked)}>${t("filterSounds")}</label>
+        <label><input type="checkbox" data-filter="other" .checked=${live(this.showOther)} @change=${(e: Event) => (this.showOther = (e.target as HTMLInputElement).checked)}>${t("filterOther")}</label>
+        <label title=${t("primarySync")}><input type="checkbox" data-action="primary-sync" ?disabled=${this.locks.order || this.busy} .checked=${live(d.primary_sync !== false)} @change=${(e: Event) => void this.setSync((e.target as HTMLInputElement).checked)}>${t("primarySync")}</label>
+      </div>
+      ${this.locks.order ? nothing : html`<p class="muted note" data-note="order-shows-all">${t("orderShowsAll")}</p>`}
       ${d.rooms.length ? this.renderFloors(d.rooms) : html`<p class="muted" data-empty>${t("roomsEmpty")}</p>`}
-      ${d.unassigned.length ? html`<details class="unassigned" data-unassigned>
-        <summary>${t("unassignedTitle")} (${d.unassigned.length})</summary>
+      ${d.unassigned.some((s) => this.listed(s)) ? html`<details class="unassigned" data-unassigned>
+        <summary>${t("unassignedTitle")} (${d.unassigned.filter((s) => this.listed(s)).length})</summary>
         <p class="muted">${t("unassignedHelp")}</p>
-        <ul>${d.unassigned.map((s) => html`<li data-entity=${s.entity_id}>
+        <ul>${d.unassigned.filter((s) => this.listed(s)).map((s) => html`<li data-entity=${s.entity_id}>
           <span class="name"><strong>${s.name}</strong><small>${s.entity_id} · ${this.typeName(s.domain, s.type)}</small></span>
           <span class="value">${s.state}${s.unit ? ` ${s.unit}` : ""}</span>${this.badges(s)}</li>`)}</ul>
       </details>` : nothing}
@@ -328,6 +376,8 @@ class HomeStructureRooms extends LitElement {
     .chip { font-size: .72rem; padding: 2px 8px; border-radius: 10px; background: var(--secondary-background-color); border: 1px solid var(--divider-color); }
     button.small, button.link { font: inherit; font-size: .8rem; color: var(--primary-color); background: none; border: 1px solid var(--divider-color); border-radius: 8px; padding: 2px 8px; cursor: pointer; } button.small:disabled { opacity: .4; cursor: default; }
     button.link { border: 0; text-transform: none; letter-spacing: 0; text-decoration: underline; padding: 0 4px; }
+    .filters { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 0 0 12px; font-size: .9rem; } .filters label { display: inline-flex; gap: 6px; align-items: center; }
+    .chooser { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: .85rem; margin: 2px 0 6px; } .chooser select { font: inherit; max-width: 100%; } .why { margin-left: 4px; }
     .note { margin: 2px 0 0; } .occupants { margin: 0; }
     summary { cursor: pointer; font-weight: 500; padding: 4px 0; }
     .scrim { position: fixed; inset: 0; z-index: 30; background: rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; padding: 16px; }

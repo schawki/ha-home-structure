@@ -52,6 +52,9 @@ async def ws_save(hass: HomeAssistant, connection: websocket_api.ActiveConnectio
     data = {"zones": [], "connections": [], "excluded_areas": [], "layout": {}, "room_types": {}, "room_occupants": {}, **copy.deepcopy(msg["options"])}
     data["groups"] = copy.deepcopy(entry.options.get("groups", []))        # the groups have their own command: a plan saved late never overwrites them
     data["sensor_order"] = copy.deepcopy(entry.options.get("sensor_order", {}))      # so has the order of the sensors of each room
+    for key in ("primary_sensor", "primary_sync"):      # and the sensor chosen for each category
+        if key in entry.options:
+            data[key] = copy.deepcopy(entry.options[key])
     area_ids = {a["id"] for a in structure.areas(hass)}
     model.apply_layout(data, area_ids)
     model.prune_occupants(data, {u["id"] for u in await structure.users(hass)})      # users deleted in Home Assistant are forgotten

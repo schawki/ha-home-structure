@@ -37,10 +37,12 @@
   const kinds = ["garden", "balcony", "terrace", "courtyard", "garage", "hall", "stairwell", "common_area", "street", "neighbor", "other"];
   const inHome = { garden: true, balcony: true, terrace: true, courtyard: false, garage: true, hall: false, stairwell: false, common_area: false, street: false, neighbor: false, other: false };
   // ---- the Rooms page: a small stateful stand-in for the sensors, their exposure, their rooms, their order and the history
-  const mk = (id, name, cls, st, unit, area, extra = {}) => ({ entity_id: id, name, state: st, unit, domain: "sensor", type: cls, area_id: area, device_id: null, device_name: null, assist: false, alexa: false, google: false, homekit: [], matter: [], ...extra });
+  const mk = (id, name, cls, st, unit, area, extra = {}) => ({ entity_id: id, name, state: st, unit, domain: "sensor", type: cls, area_id: area, device_id: null, device_name: null, assist: false, alexa: false, google: false, homekit: [], matter: [], hidden: null, ...extra });
   S.sensors = [mk("sensor.salon_temp", "Salon temperature", "temperature", "21", "°C", "salon", { assist: true, homekit: ["Bridge"], device_id: "dev1", device_name: "Thermo" }),
     mk("sensor.salon_temp2", "Salon temperature 2", "temperature", "22", "°C", "salon", { matter: q.get("nomatter") ? [] : ["Hub"] }),
-    mk("sensor.salon_hum", "Salon humidity", "humidity", "50", "%", "salon", { device_id: "dev1", device_name: "Thermo" }), mk("sensor.loose", "Loose sensor", "other", "3", null, null)];
+    mk("sensor.salon_hum", "Salon humidity", "humidity", "50", "%", "salon", { device_id: "dev1", device_name: "Thermo" }), mk("sensor.loose", "Loose sensor", "illuminance", "3", null, null),
+    mk("sensor.salon_angle", "Salon angle x", "other", "12", "°", "salon", { hidden: "other" }), mk("binary_sensor.salon_bark_sound", "Salon bark sound", "sound", "off", null, "salon", { domain: "binary_sensor", hidden: "sound" })];
+  S.chosen = {}; S.sync = true;
   S.saved = {}; S.history = []; S.hid = 0; S.writes = [];
   if (q.get("notfirst")) { S.sensors[0].assist = false; S.sensors[1].assist = true; S.saved["salon"] = { "sensor.temperature": ["sensor.salon_temp", "sensor.salon_temp2"] }; }
   const stamp = (e) => { const x = { id: "h" + ++S.hid, time: "2026-10-24T20:00:00", undone: false, ...e }; S.history.unshift(x); return x; };
@@ -50,12 +52,14 @@
       const saved = S.saved[area]?.[key];
       items.sort((x, y) => (saved ? saved.indexOf(x.entity_id) - saved.indexOf(y.entity_id) : (y.assist - x.assist) || x.name.localeCompare(y.name)));
       const ordered = items.length >= 2, exp = items.some((x) => x.assist);
-      return { key, type: key.split(".")[1], domain: "sensor", sensors: items, ordered, saved: !!saved && ordered, assist_first: ordered && exp ? items[0].assist : null };
+      const pick = S.chosen[area]?.[key]; const first = items.find((x) => x.assist);
+      return { key, type: key.split(".")[1], domain: items[0].domain, sensors: items, ordered, saved: !!saved && ordered, assist_first: ordered && exp ? items[0].assist : null,
+        primary: pick ? pick : first ? first.entity_id : null, primary_source: pick ? (S.sync && /temperature|humidity/.test(key) ? "native" : "chosen") : first ? "assist" : null };
     });
   };
   const R = {
     room_sensors: () => ({ rooms: [{ id: "area:salon", area_id: "salon", name: "Salon", kind: "room", occupants: ["u2"], floor: "Ground floor", floor_level: 0, types: groupsOf("salon") }, { id: "area:cuisine", area_id: "cuisine", name: "Cuisine", kind: "room", occupants: [], floor: "First floor", floor_level: 1, types: groupsOf("cuisine") }],
-      unassigned: S.sensors.filter((x) => !x.area_id), homekit: [{ title: "Bridge", mode: "bridge" }], assistants: { alexa: !!q.get("alexa"), google: !!q.get("alexa") }, matter: { available: !q.get("nomatter"), bridges: q.get("nomatter") ? [] : ["Hub"] } }),
+      unassigned: S.sensors.filter((x) => !x.area_id), primary_sync: S.sync, homekit: [{ title: "Bridge", mode: "bridge" }], assistants: { alexa: !!q.get("alexa"), google: !!q.get("alexa") }, matter: { available: !q.get("nomatter"), bridges: q.get("nomatter") ? [] : ["Hub"] } }),
     exposure_set: (m) => { if (q.get("failwrite")) throw { code: "changed_since", message: "x" }; const x = S.sensors.find((y) => y.entity_id === m.entity_id); const [k, v] = Object.entries(m.changes)[0]; const f = k === "conversation" ? "assist" : k;
       const before = { [k]: x[f] }; x[f] = v; S.writes.push(["exposure", m.entity_id, k, v]); return stamp({ kind: "exposure", entity_id: m.entity_id, before, after: { [k]: v } }); },
     move_preview: (m) => { const x = S.sensors.find((y) => y.entity_id === m.entity_id); const dev = x.device_id ? { id: "dev1", name: "Thermo", area_id: "salon", others: S.sensors.filter((y) => y.device_id === "dev1" && y !== x).map((y) => ({ entity_id: y.entity_id, name: y.name, area_id: y.area_id })) } : null;
@@ -64,6 +68,9 @@
     move_apply: (m) => { const x = S.sensors.find((y) => y.entity_id === m.entity_id); const before = { area: x.area_id }; const moved = m.scope === "device" ? S.sensors.filter((y) => y.device_id === x.device_id) : [x];
       moved.forEach((y) => (y.area_id = m.area_id)); S.writes.push(["move", m.entity_id, m.area_id, m.scope]); return stamp({ kind: "move", entity_id: m.entity_id, scope: m.scope, area_id: m.area_id, before, after: { area: m.area_id } }); },
     save_order: (m) => { S.writes.push(["order", m.area_id, m.key, m.entity_ids]); if (m.entity_ids.length) (S.saved[m.area_id] ||= {})[m.key] = m.entity_ids; else if (S.saved[m.area_id]) delete S.saved[m.area_id][m.key]; return {}; },
+    primary_set: (m) => { const before = { chosen: S.chosen[m.area_id]?.[m.key] ?? null }; if (m.entity_id) (S.chosen[m.area_id] ||= {})[m.key] = m.entity_id; else delete (S.chosen[m.area_id] || {})[m.key];
+      S.writes.push(["primary", m.area_id, m.key, m.entity_id]); return stamp({ kind: "primary", entity_id: m.entity_id || before.chosen, area_id: m.area_id, key: m.key, before, after: { chosen: m.entity_id } }); },
+    primary_sync: (m) => { S.sync = m.value; S.writes.push(["sync", m.value]); return { primary_sync: m.value }; },
     history: () => ({ entries: S.history }),
     undo: (m) => { const e = S.history.find((x) => x.id === m.entry_id); e.undone = true; if (e.kind === "exposure") { const [k, v] = Object.entries(e.before)[0]; S.sensors.find((y) => y.entity_id === e.entity_id)[k === "conversation" ? "assist" : k] = v; } S.writes.push(["undo", e.id]); return e; },
   };

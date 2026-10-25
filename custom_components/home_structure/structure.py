@@ -134,7 +134,8 @@ async def room_sensors_view(hass: HomeAssistant, entry: ConfigEntry) -> dict:
     ids = {u["id"] for u in await users(hass)}
     for sp in spaces:
         sp["occupants"] = [u for u in sp["occupants"] if u in ids]       # a deleted user is not an occupant
-    return room_sensors.view(hass, spaces, await room_sensors.matter_bridges(hass), entry.options.get("sensor_order") or {})
+    return room_sensors.view(hass, spaces, await room_sensors.matter_bridges(hass), entry.options.get("sensor_order") or {},
+                             entry.options.get("primary_sensor") or {}, entry.options.get("primary_sync", True))
 
 
 def room_entities_view(hass: HomeAssistant, entry: ConfigEntry, domains: list[str] | None) -> dict:

@@ -122,3 +122,82 @@ async def test_only_administrators_can_write(hass, hass_ws_client, hass_read_onl
                       ("save_order", {"area_id": home["salon"], "key": "sensor.temperature", "entity_ids": []}), ("undo", {"entry_id": "x"}), ("history", {})):
         r = await call(client, type_, **kw)
         assert not r["success"] and r["error"]["code"] == "unauthorized", type_
+
+
+def _group(view, area, key):
+    room = next(r for r in view["rooms"] if r["area_id"] == area)
+    return next(g for g in room["types"] if g["key"] == key)
+
+
+async def test_sound_detections_and_other_sensors_are_hidden_by_default(hass, hass_ws_client, home):
+    ents = er.async_get(hass)
+    ents.async_get_or_create("binary_sensor", "frigate", "e1:audio_sensor:cam_bark", original_device_class="sound", suggested_object_id="cam_bark_sound")
+    ents.async_get_or_create("binary_sensor", "sound_recognition", "sr1", suggested_object_id="sr_dog")
+    ents.async_get_or_create("sensor", "test", "x1", suggested_object_id="angle_x")
+    ents.async_get_or_create("binary_sensor", "test", "m1", original_device_class="motion", suggested_object_id="hall_motion")
+    for eid in ("binary_sensor.cam_bark_sound", "binary_sensor.sr_dog", "sensor.angle_x", "binary_sensor.hall_motion"):
+        ents.async_update_entity(eid, area_id=home["salon"])
+    client = await hass_ws_client(hass)
+    view = (await call(client, "room_sensors"))["result"]
+    room = next(r for r in view["rooms"] if r["area_id"] == home["salon"])
+    hidden = {s["entity_id"]: s["hidden"] for g in room["types"] for s in g["sensors"]}
+    assert hidden["binary_sensor.cam_bark_sound"] == "sound" and hidden["binary_sensor.sr_dog"] == "sound"
+    assert hidden["sensor.angle_x"] == "other"
+    assert hidden["binary_sensor.hall_motion"] is None and hidden["sensor.thermo_temp"] is None and hidden["sensor.thermo_hum"] is None
+
+
+async def test_the_chosen_sensor_defaults_to_assist_then_follows_the_choice_and_home_assistant(hass, hass_ws_client, home):
+    from homeassistant.components.homeassistant.exposed_entities import async_expose_entity
+    client, salon, key = await hass_ws_client(hass), home["salon"], "sensor.temperature"
+    async_expose_entity(hass, "conversation", "sensor.loose_temp", True)
+    async_expose_entity(hass, "conversation", "sensor.thermo_temp", False)
+    for eid in ("sensor.thermo_temp", "sensor.loose_temp"):
+        hass.states.async_set(eid, "20", {"device_class": "temperature"})      # Home Assistant checks the sensor before keeping it on an area
+    g = _group((await call(client, "room_sensors"))["result"], salon, key)
+    assert (g["primary"], g["primary_source"]) == ("sensor.loose_temp", "assist")
+    bad = await call(client, "primary_set", area_id=salon, key=key, entity_id="sensor.thermo_hum")
+    assert not bad["success"] and bad["error"]["code"] == "unknown_entity"                       # only a sensor of that category in that room
+    done = await call(client, "primary_set", area_id=salon, key=key, entity_id="sensor.thermo_temp")
+    assert done["success"]
+    g = _group((await call(client, "room_sensors"))["result"], salon, key)
+    assert (g["primary"], g["primary_source"]) == ("sensor.thermo_temp", "native")
+    assert ar.async_get(hass).async_get_area(salon).temperature_entity_id == "sensor.thermo_temp"      # written to Home Assistant itself
+    assert not async_should_expose_conv(hass, "sensor.thermo_temp")                                    # exposure untouched
+    hass.states.async_remove("sensor.loose_temp")
+    refused = await call(client, "primary_set", area_id=salon, key=key, entity_id="sensor.loose_temp")              # a sensor Home Assistant refuses: nothing is saved
+    assert not refused["success"] and refused["error"]["code"] == "native_rejected"
+    assert home["entry"].options["primary_sensor"][salon][key] == "sensor.thermo_temp"
+    hass.states.async_set("sensor.loose_temp", "20", {"device_class": "temperature"})
+    ar.async_get(hass).async_update(salon, temperature_entity_id="sensor.loose_temp")                  # changed in Home Assistant afterwards: followed
+    g = _group((await call(client, "room_sensors"))["result"], salon, key)
+    assert g["primary"] == "sensor.loose_temp"
+    ar.async_get(hass).async_update(salon, temperature_entity_id="sensor.thermo_temp")
+    undo = await call(client, "undo", entry_id=done["result"]["id"])
+    assert undo["success"] and ar.async_get(hass).async_get_area(salon).temperature_entity_id is None
+    assert "sensor.thermo_temp" not in str(home["entry"].options.get("primary_sensor"))
+
+
+def async_should_expose_conv(hass, eid):
+    from homeassistant.components.homeassistant.exposed_entities import async_should_expose
+    return async_should_expose(hass, "conversation", eid)
+
+
+async def test_without_the_sync_the_choice_stays_in_home_structure_and_is_kept_when_the_plan_is_saved(hass, hass_ws_client, home):
+    client, salon, key = await hass_ws_client(hass), home["salon"], "sensor.temperature"
+    assert (await call(client, "primary_sync", value=False))["success"]
+    assert (await call(client, "primary_set", area_id=salon, key=key, entity_id="sensor.loose_temp"))["success"]
+    assert ar.async_get(hass).async_get_area(salon).temperature_entity_id is None
+    view = (await call(client, "room_sensors"))["result"]
+    assert view["primary_sync"] is False and _group(view, salon, key)["primary"] == "sensor.loose_temp" and _group(view, salon, key)["primary_source"] == "chosen"
+    await call(client, "save", options={"zones": [], "connections": [], "layout": home["entry"].options["layout"]})
+    assert home["entry"].options["primary_sensor"][salon][key] == "sensor.loose_temp" and home["entry"].options["primary_sync"] is False
+    assert (await call(client, "primary_set", area_id=salon, key=key, entity_id=None))["success"]      # back to the default
+    assert "primary_sensor" in home["entry"].options and home["entry"].options["primary_sensor"] == {}
+    assert not (await call(client, "primary_set", area_id=salon, key=key, entity_id=None))["success"]
+
+
+async def test_only_administrators_can_choose(hass, hass_ws_client, hass_read_only_access_token, home):
+    client = await hass_ws_client(hass, hass_read_only_access_token)
+    for type_, kw in (("primary_set", {"area_id": home["salon"], "key": "sensor.temperature", "entity_id": None}), ("primary_sync", {"value": False})):
+        r = await call(client, type_, **kw)
+        assert not r["success"] and r["error"]["code"] == "unauthorized", type_
